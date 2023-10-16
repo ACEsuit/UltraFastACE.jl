@@ -22,8 +22,6 @@ println()
 
 ##
 
-
-
 xx0 = @SVector randn(3) 
 xx1 = @SVector randn(3)
 Z0_p = Zlm_poly(xx0)
@@ -33,8 +31,10 @@ Z1_4 = Zlm_p4ml(xx1)
 
 F_p = Z0_p ./ Z0_4 
 
+display( [ Z0_4 F_p ])
+
 display(
-      [ 
+      [ (Z1_p - Z1_4 .* F_p) F_p ]
    )
 
 
