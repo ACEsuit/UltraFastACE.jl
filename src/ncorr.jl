@@ -14,7 +14,7 @@ function _AA_dot(A, spec, c)
    T = promote_type(eltype(A), eltype(c))
    out = zero(T)
    for (i, kk) in enumerate(spec)
-      out += c[i] * prod(A[kk[t]] for t = 1:length(spec))
+      out += c[i] * prod(A[kk[t]] for t = 1:length(spec[i]))
    end
    return out 
 end

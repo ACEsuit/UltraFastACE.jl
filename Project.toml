@@ -5,6 +5,8 @@ version = "0.0.1-dev"
 
 [deps]
 ACEbase = "14bae519-eb20-449c-a949-9c58ed33163e"
+ACEpotentials = "3b96b61c-0fcc-4693-95ed-1ef9f35fcc53"
+ChainRules = "082447d4-558c-5d27-93f4-14fc19e9eca2"
 DynamicPolynomials = "7c1d4256-1411-5781-91ec-d7bc3513ac07"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"

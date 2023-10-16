@@ -1,70 +1,47 @@
-using StaticArrays, BenchmarkTools, Zygote 
+using StaticArrays, BenchmarkTools, Polynomials4ML, ACEpotentials, UltraFastACE, 
+      StaticPolynomials
+using ACEbase.Testing: println_slim, print_tf
+using Polynomials4ML: evaluate, evaluate!, release!
+using LinearAlgebra: dot 
+using ChainRules: rrule
 
-function eval_AA_dot(A, spec, c)
-   T = promote_type(eltype(A), eltype(c))
-   out = zero(T)
-   @inbounds for (i, (k1, k2)) in enumerate(spec)
-      out += A[k1] * A[k2] * c[i] 
-   end
-   return out 
-end
-
-@generated function uf1_eval_AA_dot(A::SVector{N, T}, ::Val{spec}, ::Val{c}) where {N, T, spec, c}
-   code = Expr[] 
-   for (ci, (k1, k2)) in zip(c, spec)
-      push!(code, :(out += A[$k1] * A[$k2] * $ci))
-   end
-   quote
-      out = zero($T)
-      $(Expr(:block, code...))
-      return out
-   end
-end
 
 ##
 
-nA = 100
-nAA = 1000
-spec = [ (rand(1:nA), rand(1:nA)) for _ = 1:nAA ]
-tspec = tuple(spec...)
+pot = acemodel(; elements=[:Si,], order=3, totaldegree=12)
+@show length(pot.basis)
 
-A = randn(SVector{nA, Float64})
-c = randn(SVector{nAA, Float64})
+basis = pot.basis.BB[2]
+specm = basis.pibasis.inner[1].iAA2iA
+ords = basis.pibasis.inner[1].orders
+spect = [ tuple([specm[i, t] for t=1:ords[i]]...) for i = 1:length(ords) ]
+nA = maximum(specm)
+nAA = length(spect)
+c = randn(nAA)
+corr = SparseSymmProd(spect)
+# corr = SparseSymmProdDAG()
 
-A1 = Vector(A)
-c1 = Vector(c)
-
-tc = tuple(c...)
-
-@btime eval_AA_dot($A, $spec, $c)
-@btime eval_AA_dot($A1, $spec, $c1)
-@btime eval_AA_dot($A, $tspec, $tc)
-@btime uf1_eval_AA_dot($A, $(Val(tspec)), $(Val(tc)))
-
-
-f1 = let spec=tspec, c = tc 
-   A -> eval_AA_dot(A, spec, c)
+AA_dot_p4ml = let corr=corr, c = c
+   A -> ( AA = evaluate(corr, A); out = dot(AA, c); release!(AA); out )
 end
 
-f2 = let spec=Val(tspec), c = Val(tc) 
-   A -> uf1_eval_AA_dot(A, spec, c)
-end
+AA_dot_poly = UltraFastACE.generate_AA_dot(spect, c)
 
 ##
 
-# Zygote.gradient(f1, A)
-# Zygote.gradient(f2, A)  # never finishes!!! try Enzme? 
-# @time Zygote.gradient(f1, A)
-# @time Zygote.gradient(f2, A)
+A = @SVector randn(Float64, nA)
+AA_dot_p4ml(A) ≈ AA_dot_poly(A)
+
+@btime ($AA_dot_p4ml)($A)
+@btime ($AA_dot_poly)($A)
 
 ##
 
-using DynamicPolynomials: @polyvar 
-using StaticPolynomials
+@btime StaticPolynomials.gradient($AA_dot_poly, $A)
 
-@polyvar Ap[1:100]
-p_AA_dot = Polynomial(f1(Ap))
+val, pb = rrule(evaluate, corr, A)
+pb(c)[3]
+@btime (∂A = ($pb)($c); release!(∂A));
 
-@btime p_AA_dot($A)
-StaticPolynomials.gradient(p_AA_dot, A)
-@btime StaticPolynomials.gradient($p_AA_dot, $A)
+# @btime Polynomials4ML.pullback_arg!($∂A, $∂AA, $corr, $AA) 
+
