@@ -3,6 +3,11 @@ uuid = "8bb720ee-daac-48fb-af73-8a282a9cbbd7"
 authors = ["Christoph Ortner <christohortner@gmail.com> and contributors"]
 version = "0.0.1-dev"
 
+[deps]
+Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+StaticPolynomials = "62e018b1-6e46-5407-a5a7-97d4fbcae734"
+
 [compat]
 julia = "1"
 
