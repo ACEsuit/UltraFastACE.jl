@@ -4,7 +4,10 @@ authors = ["Christoph Ortner <christohortner@gmail.com> and contributors"]
 version = "0.0.1-dev"
 
 [deps]
+DynamicPolynomials = "7c1d4256-1411-5781-91ec-d7bc3513ac07"
+OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
+Polynomials4ML = "03c4bcba-a943-47e9-bfa1-b1661fc2974f"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 StaticPolynomials = "62e018b1-6e46-5407-a5a7-97d4fbcae734"
 

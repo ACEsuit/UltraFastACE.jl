@@ -122,51 +122,57 @@ end
 # might be faster, and an approach like that might in particular 
 # be faster for backpropagation. 
 
-# @generated function Zlms(::Val{L}, rr::SVector{3, T}) where {T <: AbstractFloat}
+function _codegen_Zlm(L, T) 
+   Flm = _gen_Flm(L)
+   len = sizeY(L)
+   rt2 = sqrt(2) 
 
-#    Flm = _Flm(L)
-#    len = sizeY(L)
-#    rt2 = sqrt(2) 
+   code = Expr[] 
+   push!(code, :(x = rr[1]))
+   push!(code, :(y = rr[2]))
+   push!(code, :(z = rr[3]))
+   push!(code, :(r² = x^2 + y^2 + z^2))
 
-#    code = Expr[] 
-#    push!(code, :(x = rr[1]))
-#    push!(code, :(y = rr[2]))
-#    push!(code, :(z = rr[3]))
-#    push!(code, :(r² = x^2 + y^2 + z^2))
+   # c_m and s_m 
+   push!(code, :(s_0 = zero($T)))
+   push!(code, :(c_0 = one($T)))
+   for m = 1:L 
+      push!(code, Meta.parse("s_$m = s_$(m-1) * x + c_$(m-1) * y"))
+      push!(code, Meta.parse("c_$m = c_$(m-1) * x - s_$(m-1) * y"))
+   end
+   push!(code, Meta.parse("c_0 = one($T)/$rt2"))
 
-#    # c_m and s_m 
-#    push!(code, :(s_0 = zero($T)))
-#    push!(code, :(c_0 = one($T)))
-#    for m = 1:L 
-#       push!(code, :(s_$m = s_$(m-1) * x + c_$(m-1) * y))
-#       push!(code, :(c_$m = c_$(m-1) * x - s_$(m-1) * y))
-#    end
+   # Q_0^0 and Y_0^0
+   push!(code, Meta.parse("Q_0_0 = one($T)"))
+   push!(code, Meta.parse("Z_1 = $(Flm[0,0]/rt2) * Q_0_0"))
 
-#    push!(code, :(Q_0_0 = one($T)))
-#    push!(code, :(Z_0_0 = $(Flm[0,0]/rt2) * Q_0_0))
+   for l = 1:L 
+      # Q_l^l and Y_l^l
+      # m = l 
+      push!(code, Meta.parse("Q_$(l)_$(l)  = - $(2*l-1) * Q_$(l-1)_$(l-1)"))
+      push!(code, Meta.parse("Z_$(lm2idx(l, l))  = $(Flm[l,l]) * Q_$(l)_$(l) * c_$(l)"))
+      push!(code, Meta.parse("Z_$(lm2idx(l, -l)) = $(Flm[l, l]) * Q_$(l)_$(l) * s_$(l)"))
+      # Q_l^l-1 and Y_l^l-1
+      # m = l-1 
+      push!(code, Meta.parse("Q_$(l)_$(l-1)  = $(2*l-1) * z * Q_$(l-1)_$(l-1)"))
+      push!(code, Meta.parse("Z_$(lm2idx(l, -l+1)) = $(Flm[l, l-1]) * Q_$(l)_$(l-1) * s_$(l-1)"))
+      push!(code, Meta.parse("Z_$(lm2idx(l, l-1) ) = $(Flm[l, l-1]) * Q_$(l)_$(l-1) * c_$(l-1)" )) # overwrite if m = 0 -> ok 
+      # now we can go to the second recursion 
+      for m = l-2:-1:0 
+         push!(code, Meta.parse("Q_$(l)_$(m)  = $(2*l-1) * z * Q_$(l-1)_$m - $(l+m-1) * r² * Q_$(l-2)_$(m)"))
+         push!(code, Meta.parse("Z_$(lm2idx(l,-m)) = $(Flm[l, m]) * Q_$(l)_$(m) * s_$(m)"))
+         push!(code, Meta.parse("Z_$(lm2idx(l,m) ) = $(Flm[l, m]) * Q_$(l)_$(m) * c_$(m)"))
+      end
+   end
 
-#    # l=1 needs to be done separately because of the special case m = l-1 = 0 
-#    if L >= 1 
-#       l = 1
-#       # Q_1^1 and Y_1^1
-#       push!(code, :(Q_$l_$l = - $(2*l-1) * Q_$(l-1)_$(l-1))) 
-#       push!(code, :(Z_$l_$l = $(Flm[l,l]) * Q_$l_$l * c_$l))
-#       # Q_1^0 and Y_1^0
-#       push!(code, :(Q_$l_$(l-1) = $(2*l-1) * z * Q_$(l-1)_$(l-1)))
-#       push!(code, :(Z_$l_$(l-1) = $(Flm[l,l-1] / rt2) * Q_$l_$(l-1)))
-#       # Q_1^-1 and Y_1^-1
-#       push!(code, :(Q_$l_$(l-2) = $(2*l-1) * z * Q_$(l-1)_$(l-1)))
-#       push!(code, :(Z_$l_$(l-1) = $(Flm[l,l-1] / rt2) * Q_$l_$(l-1)))
-#    end
+   # finally generate an svector output
+   push!(code, Meta.parse("return SVector{$len, $T}(" * 
+                join( ["Z_$i, " for i = 1:len], ) * ")"))
+end
 
-#    for l = 1:L 
-#       # Q_l^l and Y_l^l
-#       push!(code, :(Q_$l_$l = - $(2*l-1) * Q_$(l-1)_$(l-1))) 
-#       push!(code, :(Z_$l_$l = $(Flm[l,l]) * Q_$l_$l * c_$l))
-#       # Q_l^l-1 and Y_l^l-1
-#       push!(code, :(Q_$l_$(l-1) = $(2*l-1) * z * Q_$(l-1)_$(l-1)))
-#       push!(code, :(Z_$l_$(l-1) = $(Flm[l,l-1]) * Q_$l_$(l-1)))
-#       # now we can go to the second recursion 
-
-#    end
-# end
+@generated function Zlms(::Val{L}, rr::SVector{3, T}) where {L, T <: AbstractFloat}
+   code = _codegen_Zlm(L, T)
+   return quote
+      $(Expr(:block, code...))
+   end
+end
