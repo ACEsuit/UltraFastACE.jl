@@ -7,6 +7,10 @@
 #       Fast evaluation of spherical harmonics with sphericart, 
 #       Filippo Bigi, Guillaume Fraux, Nicholas J. Browning and Michele Ceriotti
 #       arXiv:2302.08381; J. Chem. Phys. 159, 064802 (2023)
+# Some aspects of this implementation, specifically how to deal with the 
+# singularity, but applied in a different coordinate system were already 
+# in ACE1.jl, but this implementation works purely with cartesian coordinates
+# which is much nicer. 
 #
 
 using StaticArrays, OffsetArrays, StaticPolynomials
@@ -77,6 +81,7 @@ function _Zlms(L::Integer, rr::AbstractVector{T}) where {T}
       c[m] = c[m-1] * x - s[m-1] * y
    end
    # change c[0] to 1/rt2 to avoid a special case l-1=m=0 later 
+   c[0] = one(T)/rt2
    
    Q[0,0] = one(T)
    Z[0,0] = (Flm[0,0]/rt2) * Q[0,0]

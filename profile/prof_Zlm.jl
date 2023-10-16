@@ -1,16 +1,44 @@
 
-using UltraFastACE, StaticArrays, BenchmarkTools
-using UltraFastACE: generate_Zlms, Zlms
+using UltraFastACE, StaticArrays, BenchmarkTools, Test
+using UltraFastACE: generate_Zlms, Zlms, idx2lm
 using StaticPolynomials: jacobian 
+using Polynomials4ML: RRlmBasis, evaluate 
+using ACEbase.Testing: print_tf, println_slim 
 
-L = 5 
-valL = Val(5)
-val3 = Val(3)
-Z5 = generate_Zlms(L)
+##
 
-xx = @SVector randn(3)
+L = 5
+Zlm_poly = generate_Zlms(L)
+Zlm_p4ml = RRlmBasis(L)
+Zlm_gen = let valL = Val(L); xx -> Zlms(valL, xx); end 
 
-Z5(xx)
+for ntest = 1:20 
+   xx = @SVector randn(3) 
+   Z_p = Zlm_poly(xx)
+   Z_g = Zlm_gen(xx)
+   print_tf(@test Z_p ≈ Z_g)
+end
+println()
+
+##
+
+
+
+xx0 = @SVector randn(3) 
+xx1 = @SVector randn(3)
+Z0_p = Zlm_poly(xx0)
+Z0_4 = Zlm_p4ml(xx0)
+Z1_p = Zlm_poly(xx1)
+Z1_4 = Zlm_p4ml(xx1)
+
+F_p = Z0_p ./ Z0_4 
+
+display(
+      [ 
+   )
+
+
+##
 
 @btime ($Z5)($xx)
 @btime ($Z5)($xx)
@@ -21,7 +49,6 @@ Z5(xx)
 ##
 
 
-Zlms(valL, xx) - Z5(xx)
 
 @btime Zlms($valL, $xx)
 @btime ($Z5)($xx)
