@@ -10,7 +10,7 @@ import Polynomials4ML
 
 ##
 
-L = 3
+L = 5
 Zlm_poly = generate_Zlms(L)
 Zlm_p4ml = RRlmBasis(L)
 Zlm_gen = let valL = Val(L); xx -> Zlms(valL, xx); end 
@@ -72,10 +72,34 @@ function Zlm_gen_N!(Z, Zlm, XX)
 end
 
 
+function Zlm_gen_N_alt!(Z, ZZ, Zlm, XX)
+   broadcast!(Zlm, ZZ, XX)
+   nX = length(XX)
+   LEN = length(ZZ[1])
+   @inbounds for a = 1:LEN
+      @simd ivdep for i = 1:nX
+         Z[i, a] = ZZ[i][a]
+      end
+   end
+   return nothing  
+end
+
+
+@info("Batching a generated implementation")
 @btime Zlm_gen_N!($Z, $Zlm_gen, $XX)
+
+
 # 1.267 µs  = 1280 / 45 = 28.4 ns per evaluation
 #     whereas the pure evaluation time is 18ns. 
 
+@info("batching via broadcast (bad memory layout for pooling)")
+ZZ = Zlm_gen.(XX)
+@btime broadcast!($Zlm_gen, $ZZ, $XX)
+
+# @btime Zlm_gen_N_alt!($Z, $ZZ, $Zlm_gen, $XX)
+
+
+@info("P4ML implementation")
 @btime Polynomials4ML.evaluate!($Z, $Zlm_p4ml, $XX)
 
 # the analogous P4ML implementation is 2.167 ns. 
@@ -83,6 +107,7 @@ end
 
 ## -------------- 
 
+@info("batching via SIMD (good memory layout for pooling)")
 uf_Zlm = UltraFastACE.ZlmBasis(L)
 UltraFastACE.evaluate!(Z, uf_Zlm, XX)
 

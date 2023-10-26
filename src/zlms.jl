@@ -15,6 +15,7 @@
 
 using StaticArrays, OffsetArrays, StaticPolynomials
 using DynamicPolynomials: @polyvar
+using LoopVectorization: @avx 
 
 """
 `sizeY(maxL):`
@@ -224,7 +225,7 @@ function evaluate!(Z::AbstractMatrix,
    c = acquire!(basis.cache, :c,  (nX, L+1), T)
    Q = acquire!(basis.cache, :Q,  (nX, sizeY(L)), T)
    
-   @inbounds @avx for j = 1:nX
+   @inbounds @simd ivdep for j = 1:nX
       rr = Rs[j] 
       xj, yj, zj = rr[1], rr[2], rr[3]
       x[j] = xj
@@ -239,7 +240,7 @@ function evaluate!(Z::AbstractMatrix,
 
    # c_m and s_m continued 
    @inbounds for m = 1:L 
-      @avx for j = 1:nX
+      @simd ivdep for j = 1:nX
          # m -> m+1 and  m-1 -> m
          s[j, m+1] = s[j, m] * x[j] + c[j, m] * y[j]
          c[j, m+1] = c[j, m] * x[j] - s[j, m] * y[j]
@@ -249,7 +250,7 @@ function evaluate!(Z::AbstractMatrix,
    # change c[0] to 1/rt2 to avoid a special case l-1=m=0 later 
    i00 = lm2idx(0, 0)
 
-   @inbounds @avx for j = 1:nX
+   @inbounds @simd ivdep for j = 1:nX
       c[j, 1] = one(T)/rt2
 
       # fill Q_0^0 and Z_0^0 
@@ -263,7 +264,7 @@ function evaluate!(Z::AbstractMatrix,
       ill⁻¹ = lm2idx(l, l-1)
       il⁻¹l⁻¹ = lm2idx(l-1, l-1)
       il⁻l⁺¹ = lm2idx(l, -l+1)
-      @avx for j = 1:nX 
+      @simd ivdep for j = 1:nX 
          # Q_l^l and Y_l^l
          # m = l 
          Q[j, ill]   = - (2*l-1) * Q[j, il⁻¹l⁻¹]
@@ -283,7 +284,7 @@ function evaluate!(Z::AbstractMatrix,
          il⁻m = lm2idx(l, -m)
          il⁻¹m = lm2idx(l-1, m)
          il⁻²m = lm2idx(l-2, m)
-         @avx for j = 1:nX 
+         @simd ivdep for j = 1:nX 
             Q[j, ilm] = (2*l-1) * z[j] * Q[j, il⁻¹m] - (l+m-1) * r²[j] * Q[j, il⁻²m]
             Z[j, il⁻m] = Flm[l,m] * Q[j, ilm] * s[j, m+1]   # m -> m+1
             Z[j, ilm] = Flm[l,m] * Q[j, ilm] * c[j, m+1]    # m -> m+1
