@@ -3,19 +3,21 @@
 # using the approach proposed by 
 #       Efficient Spherical Harmonic Evaluation, Peter-Pike Sloan, 
 #       Journal of Computer Graphics Techniques, Vol. 2, No. 2, 2013
-# The ideas are expanded and details are worked out more nicely in 
+# The ideas are expanded on and details are worked out very nicely in 
 #       Fast evaluation of spherical harmonics with sphericart, 
 #       Filippo Bigi, Guillaume Fraux, Nicholas J. Browning and Michele Ceriotti
 #       arXiv:2302.08381; J. Chem. Phys. 159, 064802 (2023)
 # Some aspects of this implementation, specifically how to deal with the 
 # singularity, but applied in a different coordinate system were already 
 # in ACE1.jl, but this implementation works purely with cartesian coordinates
-# which is much nicer. 
+# which is much more elegant. The performance seems comparable for large 
+# bases (maxL large) but we gain about a factor 2-3 for small bases 
+# in the range L = 3, 4, 5. 
 #
 
 using StaticArrays, OffsetArrays, StaticPolynomials
 using DynamicPolynomials: @polyvar
-using LoopVectorization: @avx 
+using LoopVectorization: @avx, @turbo 
 
 """
 `sizeY(maxL):`
@@ -228,9 +230,9 @@ function evaluate!(Z::AbstractMatrix,
    @inbounds @simd ivdep for j = 1:nX
       rr = Rs[j] 
       xj, yj, zj = rr[1], rr[2], rr[3]
-      x[j] = xj
-      y[j] = yj
-      z[j] = zj
+      x[j] = xj 
+      y[j] = yj 
+      z[j] = zj 
       r²[j] = xj^2 + yj^2 + zj^2
 
       # c_m and s_m, m = 0 
@@ -264,17 +266,19 @@ function evaluate!(Z::AbstractMatrix,
       ill⁻¹ = lm2idx(l, l-1)
       il⁻¹l⁻¹ = lm2idx(l-1, l-1)
       il⁻l⁺¹ = lm2idx(l, -l+1)
+      F_l_l = Flm[l,l]
+      F_l_l⁻¹ = Flm[l,l-1]
       @simd ivdep for j = 1:nX 
          # Q_l^l and Y_l^l
          # m = l 
          Q[j, ill]   = - (2*l-1) * Q[j, il⁻¹l⁻¹]
-         Z[j, ill]   = Flm[l,l] * Q[j, ill] * c[j, l+1]  # l -> l+1
-         Z[j, ill⁻¹] = Flm[l,l] * Q[j, ill] * s[j, l+1]  # l -> l+1
+         Z[j, ill]   = F_l_l * Q[j, ill] * c[j, l+1]  # l -> l+1
+         Z[j, ill⁻¹] = F_l_l * Q[j, ill] * s[j, l+1]  # l -> l+1
          # Q_l^l-1 and Y_l^l-1
          # m = l-1 
          Q[j, ill⁻¹]  = (2*l-1) * z[j] * Q[j, il⁻¹l⁻¹]
-         Z[j, il⁻l⁺¹] = Flm[l,l-1] * Q[j, ill⁻¹] * s[j, l]  # l-1 -> l
-         Z[j, ill⁻¹]  = Flm[l,l-1] * Q[j, ill⁻¹] * c[j, l]  # l-1 -> l
+         Z[j, il⁻l⁺¹] = F_l_l⁻¹ * Q[j, ill⁻¹] * s[j, l]  # l-1 -> l
+         Z[j, ill⁻¹]  = F_l_l⁻¹ * Q[j, ill⁻¹] * c[j, l]  # l-1 -> l
          # overwrite if m = 0 -> ok 
       end
 
@@ -284,10 +288,11 @@ function evaluate!(Z::AbstractMatrix,
          il⁻m = lm2idx(l, -m)
          il⁻¹m = lm2idx(l-1, m)
          il⁻²m = lm2idx(l-2, m)
+         F_l_m = Flm[l,m]
          @simd ivdep for j = 1:nX 
             Q[j, ilm] = (2*l-1) * z[j] * Q[j, il⁻¹m] - (l+m-1) * r²[j] * Q[j, il⁻²m]
-            Z[j, il⁻m] = Flm[l,m] * Q[j, ilm] * s[j, m+1]   # m -> m+1
-            Z[j, ilm] = Flm[l,m] * Q[j, ilm] * c[j, m+1]    # m -> m+1
+            Z[j, il⁻m] = F_l_m * Q[j, ilm] * s[j, m+1]   # m -> m+1
+            Z[j, ilm] = F_l_m * Q[j, ilm] * c[j, m+1]    # m -> m+1
          end
       end
    end

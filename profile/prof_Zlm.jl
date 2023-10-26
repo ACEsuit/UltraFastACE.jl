@@ -10,7 +10,7 @@ import Polynomials4ML
 
 ##
 
-L = 5
+L = 10
 Zlm_poly = generate_Zlms(L)
 Zlm_p4ml = RRlmBasis(L)
 Zlm_gen = let valL = Val(L); xx -> Zlms(valL, xx); end 
@@ -112,3 +112,11 @@ uf_Zlm = UltraFastACE.ZlmBasis(L)
 UltraFastACE.evaluate!(Z, uf_Zlm, XX)
 
 @btime UltraFastACE.evaluate!($Z, $uf_Zlm, $XX)
+
+## -------------- 
+
+@profview let Z = Z, uf_Zlm = uf_Zlm, XX = XX
+   for n = 1:3_000_000
+      UltraFastACE.evaluate!(Z, uf_Zlm, XX)
+   end
+end
