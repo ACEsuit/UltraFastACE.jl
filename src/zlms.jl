@@ -181,3 +181,125 @@ end
       $(Expr(:block, code...))
    end
 end
+
+
+# ------------------------------------ 
+
+using ObjectPools
+struct ZlmBasis{L, T1}  
+   Flm::OffsetMatrix{T1, Matrix{T1}}
+   cache::ArrayPool{FlexArrayCache}
+end
+
+function ZlmBasis(L::Integer) 
+   Flm = _gen_Flm(L)
+   ZlmBasis{L, eltype(Flm)}(Flm, ArrayPool(FlexArrayCache))
+end
+
+# _get_temps(basis::ZlmBasis{L}, nX, T) where {L} = 
+#    acquire!(basis.cache, :x,  (nX, ),    T), 
+#    acquire!(basis.cache, :y,  (nX, ),    T), 
+#    acquire!(basis.cache, :z,  (nX, ),    T), 
+#    acquire!(basis.cache, :r2, (nX, ),    T), 
+#    acquire!(basis.cache, :s,  (nX, L+1), T),
+#    acquire!(basis.cache, :c,  (nX, L+1), T),
+#    acquire!(basis.cache, :Q,  (nX, sizeY(L)), T)
+
+function evaluate!(Z::AbstractMatrix, 
+                   basis::ZlmBasis{L}, 
+                   Rs::AbstractVector{SVector{3, T}}) where {L, T} 
+   Flm = basis.Flm
+   cache = basis.cache
+
+   nX = length(Rs)
+   len = sizeY(L)
+   rt2 = sqrt(2) 
+
+   # x, y, z, r², s, c, Q = _get_temps(basis, nX, T)
+   x = acquire!(basis.cache, :x,  (nX, ),    T)
+   y = acquire!(basis.cache, :y,  (nX, ),    T)
+   z = acquire!(basis.cache, :z,  (nX, ),    T)
+   r² = acquire!(basis.cache, :r2, (nX, ),   T)
+   s = acquire!(basis.cache, :s,  (nX, L+1), T)
+   c = acquire!(basis.cache, :c,  (nX, L+1), T)
+   Q = acquire!(basis.cache, :Q,  (nX, sizeY(L)), T)
+   
+   @inbounds @avx for j = 1:nX
+      rr = Rs[j] 
+      xj, yj, zj = rr[1], rr[2], rr[3]
+      x[j] = xj
+      y[j] = yj
+      z[j] = zj
+      r²[j] = xj^2 + yj^2 + zj^2
+
+      # c_m and s_m, m = 0 
+      s[j, 1] = zero(T)    # 0 -> 1
+      c[j, 1] = one(T)     # 0 -> 1
+   end
+
+   # c_m and s_m continued 
+   @inbounds for m = 1:L 
+      @avx for j = 1:nX
+         # m -> m+1 and  m-1 -> m
+         s[j, m+1] = s[j, m] * x[j] + c[j, m] * y[j]
+         c[j, m+1] = c[j, m] * x[j] - s[j, m] * y[j]
+      end
+   end
+
+   # change c[0] to 1/rt2 to avoid a special case l-1=m=0 later 
+   i00 = lm2idx(0, 0)
+
+   @inbounds @avx for j = 1:nX
+      c[j, 1] = one(T)/rt2
+
+      # fill Q_0^0 and Z_0^0 
+      Q[j, i00] = one(T)
+      Z[j, i00] = (Flm[0,0]/rt2) * Q[j, i00]
+   end
+
+   @inbounds for l = 1:L 
+      ill = lm2idx(l, l)
+      il⁻l = lm2idx(l, -l)
+      ill⁻¹ = lm2idx(l, l-1)
+      il⁻¹l⁻¹ = lm2idx(l-1, l-1)
+      il⁻l⁺¹ = lm2idx(l, -l+1)
+      @avx for j = 1:nX 
+         # Q_l^l and Y_l^l
+         # m = l 
+         Q[j, ill]   = - (2*l-1) * Q[j, il⁻¹l⁻¹]
+         Z[j, ill]   = Flm[l,l] * Q[j, ill] * c[j, l+1]  # l -> l+1
+         Z[j, ill⁻¹] = Flm[l,l] * Q[j, ill] * s[j, l+1]  # l -> l+1
+         # Q_l^l-1 and Y_l^l-1
+         # m = l-1 
+         Q[j, ill⁻¹]  = (2*l-1) * z[j] * Q[j, il⁻¹l⁻¹]
+         Z[j, il⁻l⁺¹] = Flm[l,l-1] * Q[j, ill⁻¹] * s[j, l]  # l-1 -> l
+         Z[j, ill⁻¹]  = Flm[l,l-1] * Q[j, ill⁻¹] * c[j, l]  # l-1 -> l
+         # overwrite if m = 0 -> ok 
+      end
+
+      # now we can go to the second recursion 
+      for m = l-2:-1:0 
+         ilm = lm2idx(l, m)
+         il⁻m = lm2idx(l, -m)
+         il⁻¹m = lm2idx(l-1, m)
+         il⁻²m = lm2idx(l-2, m)
+         @avx for j = 1:nX 
+            Q[j, ilm] = (2*l-1) * z[j] * Q[j, il⁻¹m] - (l+m-1) * r²[j] * Q[j, il⁻²m]
+            Z[j, il⁻m] = Flm[l,m] * Q[j, ilm] * s[j, m+1]   # m -> m+1
+            Z[j, ilm] = Flm[l,m] * Q[j, ilm] * c[j, m+1]    # m -> m+1
+         end
+      end
+   end
+
+   release!(x)
+   release!(y)
+   release!(z)
+   release!(r²)
+   release!(s)
+   release!(c)
+   release!(Q)
+
+   # finally generate an svector output 
+   return nothing 
+end
+   

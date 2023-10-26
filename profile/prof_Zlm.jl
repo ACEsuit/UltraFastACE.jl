@@ -2,12 +2,15 @@
 using UltraFastACE, StaticArrays, BenchmarkTools, Test
 using UltraFastACE: generate_Zlms, Zlms, idx2lm
 using StaticPolynomials: jacobian 
-using Polynomials4ML: RRlmBasis, evaluate 
+using Polynomials4ML: RRlmBasis, evaluate, release! 
 using ACEbase.Testing: print_tf, println_slim 
+using StrideArrays: PtrArray
+using LoopVectorization
+import Polynomials4ML
 
 ##
 
-L = 5
+L = 3
 Zlm_poly = generate_Zlms(L)
 Zlm_p4ml = RRlmBasis(L)
 Zlm_gen = let valL = Val(L); xx -> Zlms(valL, xx); end 
@@ -40,18 +43,47 @@ display(
 
 ##
 
-@btime ($Z5)($xx)
-@btime ($Z5)($xx)
-@btime jacobian($Z5, $xx)
-@btime jacobian($Z5, $xx)
+
+@btime ($Zlm_gen)($xx0)
+@btime ($Zlm_poly)($xx0)
+@btime (Y = ($Zlm_p4ml)($xx0); release!(Y))
+
+
+# @btime jacobian($Zlm_gen, $xx0)
+# @btime jacobian($Zlm_gen, $xx0)
 
 
 ##
 
+XX = randn(SVector{3, Float64}, 45)
+nX = length(XX)
+lenZ = length(Z0_p)
+_Z = zeros(nX, lenZ)
+Z = PtrArray(_Z)
+
+function Zlm_gen_N!(Z, Zlm, XX)
+   nX = length(XX) 
+   @inbounds begin   
+      @simd ivdep for i = 1:nX
+         Z[i, :] .= Zlm(XX[i])
+      end
+   end
+   return nothing  
+end
 
 
-@btime Zlms($valL, $xx)
-@btime ($Z5)($xx)
+@btime Zlm_gen_N!($Z, $Zlm_gen, $XX)
+# 1.267 µs  = 1280 / 45 = 28.4 ns per evaluation
+#     whereas the pure evaluation time is 18ns. 
 
-Zlms(val3, xx)
-@btime Zlms($val3, $xx)
+@btime Polynomials4ML.evaluate!($Z, $Zlm_p4ml, $XX)
+
+# the analogous P4ML implementation is 2.167 ns. 
+# this suggests that we should just write simd sphericart version. 
+
+## -------------- 
+
+uf_Zlm = UltraFastACE.ZlmBasis(L)
+UltraFastACE.evaluate!(Z, uf_Zlm, XX)
+
+@btime UltraFastACE.evaluate!($Z, $uf_Zlm, $XX)
