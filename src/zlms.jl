@@ -20,7 +20,10 @@
 #
 module SpheriCart
 
-using StaticArrays, OffsetArrays, StaticPolynomials
+using StaticArrays, OffsetArrays, ObjectPools
+import ACEbase: evaluate, evaluate!
+
+export static_solid_harmonics, solid_harmonics!, ZlmBasis
 
 """
 `sizeY(maxL):`
@@ -115,6 +118,9 @@ function _codegen_Zlm(L, T)
                 join( ["Z_$i, " for i = 1:len], ) * ")"))
 end
 
+static_solid_harmonics(valL::Val{L}, 𝐫::SVector{3}) where {L} = 
+      static_solid_harmonics(valL, 𝐫[1], 𝐫[2], 𝐫[3])
+
 @generated function static_solid_harmonics(::Val{L}, x::T, y::T, z::T) where {L, T <: AbstractFloat}
    code = _codegen_Zlm(L, T)
    return quote
@@ -128,7 +134,6 @@ zlms(valL::Val{L}, rr::SVector{3, T}) where {L, T} =
 
 # ------------------------------------ 
 
-using ObjectPools
 struct ZlmBasis{L, T1}  
    Flm::OffsetMatrix{T1, Matrix{T1}}
    cache::ArrayPool{FlexArrayCache}
@@ -176,9 +181,9 @@ function evaluate!(Z::AbstractMatrix,
    solid_harmonics!(Z, Val{L}(), x, y, z, temps)
 
    # release the temporary arrays back into the cache
-   release!(temps.x)
-   release!(temps.y)
-   release!(temps.z)
+   release!(x)
+   release!(y)
+   release!(z)
    release!(temps.r²)
    release!(temps.s)
    release!(temps.c)
@@ -253,7 +258,7 @@ function solid_harmonics!(Z::AbstractMatrix, ::Val{L},
          # m = l 
          Q[j, ill]   = - (2*l-1) * Q[j, il⁻¹l⁻¹]
          Z[j, ill]   = F_l_l * Q[j, ill] * c[j, l+1]  # l -> l+1
-         Z[j, ill⁻¹] = F_l_l * Q[j, ill] * s[j, l+1]  # l -> l+1
+         Z[j, il⁻l] = F_l_l * Q[j, ill] * s[j, l+1]  # l -> l+1
          # Q_l^l-1 and Y_l^l-1
          # m = l-1 
          Q[j, ill⁻¹]  = (2*l-1) * z[j] * Q[j, il⁻¹l⁻¹]
