@@ -55,17 +55,39 @@ end
 """
 Generates the `F[l, m]` values exactly as described in [2]. 
 """
-function generate_Flms(L::Integer)
+function generate_Flms_sphericart(L::Integer)
    Flm = OffsetMatrix(zeros(L+1, L+1), (-1, -1))
-   for l = big(0):big(L)
-      for m = big(0):big(l)
-         Flm[l, m] = (-1)^m * sqrt( (2*l+1)/(2*π) * 
-                                     factorial(l-m) / factorial(l+m) )
+   #    Flm[l, m] = (-1)^m * sqrt( (2*l+1)/(2*π) * 
+   #                                factorial(l-m) / factorial(l+m) )
+   for l = 0:L
+      Flm[l, 0] = sqrt((2*l+1)/(2 * π))
+      for m = 1:l 
+         Flm[l, m] = - Flm[l, m-1] / sqrt((l+m) * (l+1-m))
       end
    end
    return Flm
 end
 
+function generate_Flms_p4ml(L::Integer)
+   Flm = OffsetMatrix(zeros(L+1, L+1), (-1, -1))
+   for l = 0:L
+      Flm[l, 0] = sqrt((2*l+1)/(2 * π))
+      for m = 1:l
+         Flm[l, m] = (-1)^m * sqrt((2*l+1)/(4*π) )
+      end
+   end
+   return Flm
+end
+
+function generate_Flms(L::Integer; normalisation = :sphericart)
+   if normalisation == :sphericart 
+      return generate_Flms_sphericart(L)
+   elseif normalisation == :p4ml
+      return generate_Flms_p4ml(L)
+   else
+      throw(ArgumentError("unknown normalisation"))
+   end
+end
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Implementation 1: 
@@ -73,8 +95,8 @@ end
 #  (with a single input) 
 #  
 
-function _codegen_Zlm(L, T) 
-   Flm = generate_Flms(L)
+function _codegen_Zlm(L, T, normalisation) 
+   Flm = generate_Flms(L; normalisation = normalisation)
    len = sizeY(L)
    rt2 = sqrt(2) 
 
@@ -88,6 +110,8 @@ function _codegen_Zlm(L, T)
       push!(code, Meta.parse("s_$m = s_$(m-1) * x + c_$(m-1) * y"))
       push!(code, Meta.parse("c_$m = c_$(m-1) * x - s_$(m-1) * y"))
    end
+
+   # redefine c_0 = 1/√2 => this allows us to avoid special casing m=0
    push!(code, Meta.parse("c_0 = one($T)/$rt2"))
 
    # Q_0^0 and Y_0^0
@@ -106,8 +130,8 @@ function _codegen_Zlm(L, T)
       push!(code, Meta.parse("Z_$(lm2idx(l, -l+1)) = $(Flm[l, l-1]) * Q_$(l)_$(l-1) * s_$(l-1)"))
       push!(code, Meta.parse("Z_$(lm2idx(l, l-1) ) = $(Flm[l, l-1]) * Q_$(l)_$(l-1) * c_$(l-1)" )) # overwrite if m = 0 -> ok 
       # now we can go to the second recursion 
-      for m = l-2:-1:0 
-         push!(code, Meta.parse("Q_$(l)_$(m)  = $(2*l-1) * z * Q_$(l-1)_$m - $(l+m-1) * r² * Q_$(l-2)_$(m)"))
+      for m = l-2:-1:0
+         push!(code, Meta.parse("Q_$(l)_$(m)  = $((2*l-1)/(l-m)) * z * Q_$(l-1)_$m - $((l+m-1)/(l-m)) * r² * Q_$(l-2)_$(m)"))
          push!(code, Meta.parse("Z_$(lm2idx(l,-m)) = $(Flm[l, m]) * Q_$(l)_$(m) * s_$(m)"))
          push!(code, Meta.parse("Z_$(lm2idx(l,m) ) = $(Flm[l, m]) * Q_$(l)_$(m) * c_$(m)"))
       end
@@ -118,11 +142,14 @@ function _codegen_Zlm(L, T)
                 join( ["Z_$i, " for i = 1:len], ) * ")"))
 end
 
-static_solid_harmonics(valL::Val{L}, 𝐫::SVector{3}) where {L} = 
-      static_solid_harmonics(valL, 𝐫[1], 𝐫[2], 𝐫[3])
+static_solid_harmonics(valL::Val{L}, 𝐫::SVector{3}, 
+                     valNorm = Val{:sphericart}()) where {L} = 
+      static_solid_harmonics(valL, 𝐫[1], 𝐫[2], 𝐫[3], valNorm)
 
-@generated function static_solid_harmonics(::Val{L}, x::T, y::T, z::T) where {L, T <: AbstractFloat}
-   code = _codegen_Zlm(L, T)
+@generated function static_solid_harmonics(::Val{L}, x::T, y::T, z::T, 
+                     valNorm::Val{NORM} = Val{:sphericart}()
+                     ) where {L, T <: AbstractFloat, NORM}
+   code = _codegen_Zlm(L, T, NORM)
    return quote
       $(Expr(:block, code...))
    end
@@ -275,7 +302,7 @@ function solid_harmonics!(Z::AbstractMatrix, ::Val{L},
          il⁻²m = lm2idx(l-2, m)
          F_l_m = Flm[l,m]
          @simd ivdep for j = 1:nX 
-            Q[j, ilm] = (2*l-1) * z[j] * Q[j, il⁻¹m] - (l+m-1) * r²[j] * Q[j, il⁻²m]
+            Q[j, ilm] = ((2*l-1) * z[j] * Q[j, il⁻¹m] - (l+m-1) * r²[j] * Q[j, il⁻²m]) / (l-m)
             Z[j, il⁻m] = F_l_m * Q[j, ilm] * s[j, m+1]   # m -> m+1
             Z[j, ilm] = F_l_m * Q[j, ilm] * c[j, m+1]    # m -> m+1
          end
