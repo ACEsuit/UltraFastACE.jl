@@ -1,9 +1,12 @@
 
 using ACEpotentials, StaticArrays, Interpolations, BenchmarkTools, 
-      LinearAlgebra, Polynomials4ML, SparseArrays
+      LinearAlgebra, Polynomials4ML, SparseArrays, UltraFastACE
 using ACEpotentials.ACE1: evaluate
 P4ML = Polynomials4ML
+C2R = UltraFastACE.ConvertC2R
 import SpheriCart
+
+##
 
 zSi = AtomicNumber(:Si)
 zO = AtomicNumber(:O)
@@ -25,7 +28,7 @@ function make_radial_splines(Rn_basis; npoints = 100)
    spl = CubicSplineInterpolation(rspl, yspl)
 end
 
-spl = make_radial_splines(Rn_basis)
+spl = make_radial_splines(Rn_basis; npoints = 10_000)
 
 norm(evaluate(Rn_basis, 1.0, zSi, zSi) - spl(1.0))
 
@@ -37,118 +40,95 @@ norm(evaluate(Rn_basis, 1.0, zSi, zSi) - spl(1.0))
 
 L = b1p.SH.maxL
 cYlm_basis_ace1 = b1p.SH 
-cYlm_basis_p4 = CYlmBasis(L)
-rYlm_basis_p4 = RYlmBasis(L)
 rYlm_basis_sc = SpheriCart.SphericalHarmonics(L)
+T_Ylm = C2R.r2c_transform(L) * C2R.sc2p4_transform(L)
 
 𝐫 = @SVector randn(3)
 Y1 = evaluate(cYlm_basis_ace1, 𝐫)
-Y2 = evaluate(cYlm_basis_p4, 𝐫)
-Y3 = evaluate(rYlm_basis_p4, 𝐫)
-Y4 = SpheriCart.compute(rYlm_basis_sc, 𝐫)
-
-function r2c_transform(L)
-   T = zeros(ComplexF64, (L+1)^2, (L+1)^2)
-   for l = 0:L 
-      # m = 0
-      i_l0 = P4ML.lm2idx(l, 0)
-      T[i_l0, i_l0] = 1.0 
-      for m = 1:l
-         i_lm  = P4ML.lm2idx(l,  m)
-         i_l⁻m = P4ML.lm2idx(l, -m)
-         T[ i_lm,  i_lm] = 1/sqrt(2) 
-         T[ i_lm, i_l⁻m] = -im/sqrt(2) 
-         T[i_l⁻m,  i_lm] = (-1)^m/sqrt(2) 
-         T[i_l⁻m, i_l⁻m] = (-1)^m*im/sqrt(2) 
-      end
-   end
-   return sparse(T)
-end
-
-function sc2p4_transform(L) 
-   D = zeros((L+1)^2)
-   for l = 0:L
-      for m = -l:-1
-         i_lm = P4ML.lm2idx(l, m)
-         D[i_lm] = (-1)^(m+1)
-      end
-      i_l0 = P4ML.lm2idx(l, 0)
-      D[i_l0] = 1
-      for m = 1:l
-         i_lm = P4ML.lm2idx(l, m)
-         D[i_lm] = (-1)^(m)
-      end
-   end
-   return Diagonal(D)
-end
-
-Y1 ≈ Y2
-
-T_r2c = r2c_transform(L)
-T_r2c * Y3 ≈ Y2
-
-T_sc2p4 = sc2p4_transform(L)
-T_sc2p4 * Y4 ≈ Y3
-
-T = T_r2c * T_sc2p4
-T * Y4 ≈ Y1
-Tinv = sparse(round.(pinv(Matrix(T)); digits=15))
+Y2 = SpheriCart.compute(rYlm_basis_sc, 𝐫)
+Y1 ≈ T_Ylm * Y2
 
 ##  ------------------------------------
 
-aa_basis = mbpot.pibasis
-aa_spec_1 = ACE1.get_basis_spec(aa_basis, 1)
-aa_llmm = [ [(b.l, b.m) for b in bb.oneps] for bb in aa_spec_1 ]
-
-inv_spec = Dict{Any, Int}() 
-for i = 1:length(aa_spec_1)
-   inv_spec[aa_spec_1[i]] = i
+function make_ace1_AA_spec(mpot) 
+   D_spec = mbpot.pibasis.inner[1].b2iAA
+   spec_c = Vector{Vector{NamedTuple{(:z, :n, :l, :m), Tuple{AtomicNumber, Int, Int, Int}}}}(undef, length(D_spec))
+   for (bb1, idx) in D_spec 
+      bb = [ (z = b.z, n = b.n, l = b.l, m = b.m) for b in bb1.oneps ]
+      spec_c[idx] = bb
+   end  
+   return spec_c  
 end
 
-
-# Y_ll^mm 
-#   = ∏_t Y_lt^mt
-#   = ∏_t  ∑_kt T[(lt, mt), (lt, kt)] * Z_lt^kt 
-#   = ∑_{k1,k2,...} { ∏_t T[(lt, mt), (lt, kt)] } ∏_t Z_lt^kt
-#   = ∑_{k1,k2,...} S^ll_{mm, kk}  Z_ll^kk
-# this will give us the transformation from AA_r -> AA_c 
-
-lenAA = length(aa_spec_1)
-S = zeros(ComplexF64, lenAA, lenAA)
-for i = 50:60
-   bb = aa_spec_1[i] 
-   ll = [ b.l for b in bb.oneps ]
-   mm = [ b.m for b in bb.oneps ]
-   N = length(ll)
-
-   transforms = [] 
-   for t = 1:N 
-      lt = ll[t]
-      mt = mm[t]
-      i_ltmt = P4ML.lm2idx(lt, mt)
-      push!(transforms, findall(!iszero, T[i_ltmt, :]))
-   end
-
-   for rows_N in Iterators.product(transforms...)
-      
-      # c = prod([ c for (_, c) in rows_N ])
-      # get back the global indices
-      # S[i, rows] = c
-      kk = [ P4ML.idx2lm(it)[2] for it in rows_N ]
-      @show kk 
-   end
+function make_AA_transform(mbpot)
+   spec_AA_ace1 = make_ace1_AA_spec(mbpot)
+   return C2R._AA_r2c_transform(spec_c, D_T1; f = real)
 end
 
-## -------------------------------------
+AA_transform = make_AA_transform(mbpot)
 
-Nat = 10 
-Rs = [ (@SVector randn(3)) for _ = 1:Nat ]
+## ------------------------------------
+
+Nat = 12; r0 = 0.9 * rnn(:Si); r1 = 1.3 * rnn(:Si)
+Rs = [ (r0 + (r1 - r0) * rand()) * ACE1.Random.rand_sphere() for _=1:Nat ]
 Zs = [ rand([zSi, zO]) for _ = 1:Nat ]
-z0 = zSi 
+z0 = JuLIP.Potentials.i2z(mbpot, 1)
+v1 = ACE1.evaluate(mbpot, Rs, Zs, z0)
 
-evaluate(b1p, Rs, Zs, z0)
+lenAA1 = length(mbpot.coeffs[1])
+AA_c = evaluate(mbpot.pibasis, Rs, Zs, z0)[1:lenAA1]
+dot(real.(AA_c), real.(mbpot.coeffs[1])) ≈ v1
 
-spec1p = ACE1.get_basis_spec(b1p, zSi)
+## ------------------------------------
+# evaluate the embeddings of the particles 
+
+zlist = JuLIP.Potentials.i2z.(Ref(mbpot), [1,2])
+Ez = reduce(vcat, [ (z .== zlist)' for z in Zs ])
+Rn = reduce(vcat, spl.(norm.(Rs))')
+Zlm = rYlm_basis_sc(Rs)
+
+## ------------------------------------
+# construct the real A basis 
+
+AA_spec_r = AA_transform[:spec_r]
+A_spec_r = sort(unique(reduce(vcat, AA_spec_r)))
+
+# now we have to convert this into Ez, Rn, Zlm indices 
+spec2i_Ez = Dict([zlist[i] => i for i = 1:length(zlist)]...)
+spec2i_Rn = 1:size(Rn, 2)
+spec2i_Ylm = Dict([ (l = P4ML.idx2lm(i)[1], m = P4ML.idx2lm(i)[2]) => i  
+                   for i = 1:size(Zlm, 2) ]...)
+
+inv_spec_A = Dict{NamedTuple, Int}() 
+spec_A_inds = Vector{NTuple{3, Int}}(undef, length(A_spec_r))
+for (i, b) in enumerate(A_spec_r)
+   i_Ez = spec2i_Ez[b.z]
+   i_Rn = spec2i_Rn[b.n]
+   i_Ylm = spec2i_Ylm[(l = b.l, m = b.m)]
+   inv_spec_A[b] = i 
+   spec_A_inds[i] = (i_Ez, i_Rn, i_Ylm)
+end
+
+# generate the pooling layer 
+A_basis = P4ML.PooledSparseProduct(spec_A_inds)
+# and evaluate it 
+A = A_basis((Ez, Rn, Zlm))
+
+## ------------------------------------
+# construct the real AA basis 
+# this means constructing kk = [k1, k2, ...] 
+# with the ki pointing into an A vector. 
+
+AA_spec_r = AA_transform[:spec_r]
+inv_AA_spec_r = AA_transform[:inv_spec_r]
+spec_AA_inds = Vector{Vector{Int}}(undef, length(AA_spec_r))
+for (i, bb) in enumerate(AA_spec_r)
+   spec_AA_inds[i] = [ inv_spec_A[b] for b in bb ]
+end
+
+AA_basis = P4ML.SparseSymmProd(spec_AA_inds)
+AA_r = AA_basis(A)
 
 
-
+AA_c 
+AA_r_t = AA_transform[:T] * AA_r
