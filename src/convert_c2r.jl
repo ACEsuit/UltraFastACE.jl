@@ -68,6 +68,37 @@ function _dict_Ylm_transform(TT::AbstractMatrix{T}) where {T}
    return D 
 end
 
+"""
+transform an A basis 
+- `spec_c` : complex A basis spec `(z = .., n = .., l = .., m = ..)[]`
+- `D_T` : dict of the Ylm transform; cf. `_dict_Ylm_transform`
+"""
+function _A_transform(spec_c, spec_r, D_T; cache = Dict())
+   # first construct the real spec and inverse specs 
+   # the real spec in this case could be identical to the complex spec 
+   NT = eltype(spec_c)
+   inv_spec_c = Dict{NT, Int}()
+   inv_spec_r = Dict{NT, Int}()
+   for i = 1:length(spec_c)
+      inv_spec_c[spec_c[i]] = i
+      inv_spec_r[spec_r[i]] = i
+   end
+
+   # now we create a triplet-format sparse matrix
+   rows = Int[]; cols = Int[]; vals = Any[]
+   for (i_c, b) in enumerate(spec_c) 
+      T_lmk = D_T[(b.l, b.m)] 
+      for (k, t) in T_lmk 
+         i_r = inv_spec_r[(z = b.z, n = b.n, l = b.l, m = k)]
+         push!(rows, i_c)
+         push!(cols, i_r)
+         push!(vals, t)
+      end
+   end
+
+   return sparse(rows, cols, identity.(vals))
+end
+
 """ 
 construct the transform of tensor products
 - `D_T` : dict of the Ylm transform; cf. `_dict_Ylm_transform`
