@@ -168,3 +168,9 @@ AA_r_t = AA_transform[:T] * AA_r
 
 real.(AA_c) ≈ AA_r_t
 
+## transform the coefficients 
+
+len_c = length(AA_c)
+c_r = Dict(zO => AA_transform[:T]' * mbpot.coeffs[1], 
+           zSi => AA_transform[:T]' * mbpot.coeffs[2])
+dot(AA_r, c_r[zO]) ≈ v1           
