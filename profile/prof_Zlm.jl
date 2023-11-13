@@ -1,6 +1,6 @@
 
 using UltraFastACE, StaticArrays, BenchmarkTools, Test
-using UltraFastACE.SpheriCart: ZlmBasis, static_solid_harmonics, evaluate!
+using UltraFastACE.SpheriCart: ZlmBasis, static_solid_harmonics, evaluate!, evaluate 
 using ACEbase.Testing: print_tf, println_slim 
 using StrideArrays: PtrArray
 using LoopVectorization

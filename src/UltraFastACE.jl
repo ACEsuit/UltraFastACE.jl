@@ -9,6 +9,7 @@ function _z2i(basis, Z)
       end
    end
    error("_z2i : Z = $Z not found in obj._i2z")
+   return -1 # never reached
 end
 
 
@@ -16,5 +17,6 @@ include("zlms.jl")
 include("ncorr.jl")
 include("splines.jl")
 
+include("convert_c2r.jl")
 
 end
