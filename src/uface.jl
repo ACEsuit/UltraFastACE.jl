@@ -1,21 +1,31 @@
 import Polynomials4ML
 import ACEpotentials
-using Interpolations
+using Interpolations, ObjectPools
 import SpheriCart
 import ACEpotentials.ACE1
 import ACEpotentials.ACE1: AtomicNumber
-# using SpheriCart: SphericalHarmonics, compute
+using LinearAlgebra: norm 
 
-C2R = ConvertC2R
-P4ML = Polynomials4ML
+import ACEbase 
+import ACEbase: evaluate
+
+
+const C2R = ConvertC2R
+const P4ML = Polynomials4ML
 
 struct UFACE_inner{TR, TY, TA, TAA}
    rbasis::TR
    ybasis::TY
    abasis::TA
    aadot::TAA
+   pool::TSafe{ArrayPool{FlexArrayCache}}
    meta::Dict
 end
+
+UFACE_inner(rbasis, ybasis, abasis, aadot) = 
+   UFACE_inner(rbasis, ybasis, abasis, aadot, 
+               TSafe(ArrayPool(FlexArrayCache)), 
+               Dict())
 
 struct UFACE{N, TR, TY, TA, TAA}
    _i2z::NTuple{N, Int}
@@ -30,9 +40,23 @@ function evaluate(ace::UFACE, Rs, Zs, zi)
 end
 
 
-function evaluate(ace::UFACE_inner, Rs, Zs)
+function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
    
+   rbasis = ace.rbasis 
+   _spl(rbasis, z) = rbasis.spl[UltraFastACE._z2i(rbasis, z)]
+   
+   # embeddings 
+   Ez = reduce(vcat, [ SVector((z .== rbasis._i2z)...)' for z in Zs ])
+   Rn = reduce(vcat, [ _spl(rbasis, Zs[j])(norm(Rs[j]))' for j = 1:length(Rs) ])
+   Zlm = ace.ybasis(Rs)
+   
+   # pooling 
+   A = ace.abasis((Ez, Rn, Zlm))
 
+   # n correlations
+   φ = ace.aadot(A)   
+
+   return φ
 end
 
 
@@ -131,5 +155,5 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
    aadot = generate_AA_dot(spec_AA_inds, c_r_iz)
 
 
-   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot, Dict()), AA_transform 
+   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot)
 end
