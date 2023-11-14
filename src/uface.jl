@@ -27,16 +27,16 @@ UFACE_inner(rbasis, ybasis, abasis, aadot) =
                TSafe(ArrayPool(FlexArrayCache)), 
                Dict())
 
-struct UFACE{N, TR, TY, TA, TAA}
-   _i2z::NTuple{N, Int}
-   ace_inner::NTuple{N, UFACE_inner{TR, TY, TA, TAA}}
+struct UFACE{NZ, INNER}
+   _i2z::NTuple{NZ, Int}
+   ace_inner::INNER
 end
 
 
-function evaluate(ace::UFACE, Rs, Zs, zi) 
+function ACEbase.evaluate(ace::UFACE, Rs, Zs, zi) 
    i_zi = _z2i(ace, zi)
    ace_inner = ace.ace_inner[i_zi]
-   return evaluate(ace_inner, Rs, Zs)
+   return ACEbase.evaluate(ace_inner, Rs, Zs)
 end
 
 
@@ -156,4 +156,14 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
 
 
    return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot)
+end
+
+
+function uface_from_ace1(mbpot; n_spl_points = 100)
+   NZ = length(mbpot.pibasis.zlist)
+   _i2z = tuple(Int.(mbpot.pibasis.zlist.list)...)
+   ace_inner = tuple( 
+         [ uface_from_ace1_inner(mbpot, iz; n_spl_points = n_spl_points) 
+           for iz = 1:NZ ]... )
+   return UFACE(_i2z, ace_inner)           
 end
