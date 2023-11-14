@@ -1,3 +1,7 @@
+# This is not a unit test, just a script used to experiment 
+# with converting the complex ACE1 code to UF_ACE.
+#
+
 using ACEpotentials, StaticArrays, Interpolations, BenchmarkTools, 
       LinearAlgebra, Polynomials4ML, SparseArrays, UltraFastACE
 using ACEpotentials.ACE1: evaluate
