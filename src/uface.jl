@@ -126,8 +126,10 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
       spec_AA_inds[i] = sort([ inv_spec_A[b] for b in bb ])
    end
 
-   AA_basis = P4ML.SparseSymmProd(spec_AA_inds)
+   # AA_basis = P4ML.SparseSymmProd(spec_AA_inds)
+   c_r_iz = AA_transform[:T]' * mbpot.coeffs[iz]
+   aadot = generate_AA_dot(spec_AA_inds, c_r_iz)
 
 
-   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, AA_basis, Dict()), AA_transform 
+   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot, Dict()), AA_transform 
 end
