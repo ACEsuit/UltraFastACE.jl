@@ -7,7 +7,6 @@ end
 
 struct SplineRadialsZ{SPL, N}
    _i2z::NTuple{N, Int}
-   idx::NTuple{N, Int}
    spl::NTuple{N, SPL}
 end
 

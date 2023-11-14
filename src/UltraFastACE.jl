@@ -2,9 +2,9 @@ module UltraFastACE
 
 _i2z(obj, i::Integer) = obj._i2z[i] 
 
-function _z2i(basis, Z)
+function _z2i(obj, Z)
    for i_Z = 1:length(obj._i2z)
-      if basis._i2z[i_Z] == Z
+      if obj._i2z[i_Z] == Z
          return i_Z
       end
    end
@@ -13,10 +13,12 @@ function _z2i(basis, Z)
 end
 
 
-include("zlms.jl")
+# include("zlms.jl")
 include("ncorr.jl")
 include("splines.jl")
 
 include("convert_c2r.jl")
+
+include("uface.jl")
 
 end
