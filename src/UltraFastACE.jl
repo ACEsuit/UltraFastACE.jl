@@ -1,5 +1,9 @@
 module UltraFastACE
 
+import ACEbase 
+import ACEbase: evaluate, evaluate!, 
+                evaluate_ed, evaluate_ed!
+
 _i2z(obj, i::Integer) = obj._i2z[i] 
 
 function _z2i(obj, Z)
@@ -18,6 +22,8 @@ include("ncorr.jl")
 include("splines.jl")
 
 include("convert_c2r.jl")
+
+include("auxiliary.jl")
 
 include("uface.jl")
 
