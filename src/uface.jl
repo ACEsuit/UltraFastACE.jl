@@ -44,6 +44,15 @@ end
 _get_L(ybasis::SphericalHarmonics{L}) where {L} = L 
 _len_ylm(ybasis) = (_get_L(ybasis) + 1)^2
 
+function embed_z!(Ez, rbasis, Zs)
+   fill!(Ez, 0)
+   for (j, z) in enumerate(Zs)
+      iz = _z2i(rbasis, z)
+      Ez[j, iz] = 1
+   end
+   return Ez 
+end
+
 function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
    TF = eltype(eltype(Rs))
    rbasis = ace.rbasis 
@@ -51,23 +60,16 @@ function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
 
    _spl(rbasis, z) = rbasis.spl[UltraFastACE._z2i(rbasis, z)]
    
-   # embeddings 
-   # Ez = reduce(vcat, [ SVector((z .== rbasis._i2z)...)' for z in Zs ])
-   Ez = acquire!(ace.pool, :Ez, (length(Zs), NZ), UInt8)
-   fill!(Ez, 0)
-   for (j, z) in enumerate(Zs)
-      iz = _z2i(rbasis, z)
-      Ez[j, iz] = 1
-   end
+   # embeddings    
+   # element embedding 
+   Ez = acquire!(ace.pool, :Ez, (length(Zs), NZ), TF)
+   embed_z!(Ez, rbasis, Zs)
 
-   # Rn = reduce(vcat, [ _spl(rbasis, Zs[j])(norm(Rs[j]))' for j = 1:length(Rs) ])
+   # radial embedding 
    Rn = acquire!(ace.pool, :Rn, (length(Rs), length(rbasis)), TF)
-   for (j, z) in enumerate(Zs) 
-      spl_j = _spl(rbasis, z)
-      Rn[j, :] .= spl_j(norm(Rs[j]))
-   end
-
-   # Zlm = ace.ybasis(Rs)
+   evaluate!(Rn, rbasis, Rs, Zs)
+   
+   # angular embedding 
    Zlm = acquire!(ace.pool, :Zlm, (length(Rs), _len_ylm(ace.ybasis)), TF)
    compute!(Zlm, ace.ybasis, Rs)
    

@@ -44,3 +44,21 @@ function evaluate!(out, basis::SplineRadials, Rs, Zs)
       return out
    end
 end
+
+function evaluate!(out, basis::SplineRadialsZ, Rs, Zs)
+   nX = length(Rs)
+   len = length(basis)
+   @assert length(Zs) >= nX
+   @assert size(out, 1) >= nX
+   @assert size(out, 2) >= len 
+
+   @inbounds for ij = 1:nX 
+      rij = norm(Rs[ij]) 
+      zj = Zs[ij]
+      i_zj = _z2i(basis, zj)
+      spl_ij = basis.spl[i_zj] 
+      out[ij, :] .= spl_ij(rij)
+   end
+   return out
+end
+
