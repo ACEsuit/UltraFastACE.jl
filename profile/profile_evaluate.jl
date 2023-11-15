@@ -8,7 +8,8 @@ using ACEbase: evaluate, evaluate!, evaluate_d, evaluate_d!,
 
 elements = [:Si,:O]
 
-model = acemodel(; elements = elements, order = 3, totaldegree = 12)
+model = acemodel(; elements = elements, order = 2, totaldegree = 10)
+@show length(model.basis)
 pot = model.potential
 mbpot = pot.components[2]
 
@@ -31,10 +32,12 @@ dv1 = evaluate_d(mbpot, Rs, Zs, z0)
 dv2 = deepcopy(dv1) 
 v3, _ = evaluate_ed!(dv2, uf_ace, Rs, Zs, z0)
 
-@show abs(v3 - v2)
-@show norm(dv1-dv2) / norm(dv1)
+# @show abs(v3 - v2)
+# @show norm(dv1-dv2) / norm(dv1)
 
 ##
+
+@info("Evaluation of ACE1 and UF_ACE - single site energy")
 
 @info("ACE1 - allocating")
 @btime evaluate($mbpot, $Rs, $Zs, $z0)
@@ -57,7 +60,7 @@ tmp = ACE1.alloc_temp(mbpot, length(Rs))
 ##
 # profiling the gradient code 
 
-@info("profiling the gradient code")
+@info("Gradient of ACE1 and UF_ACE - single site energy grad")
 
 @info("ACE1 - allocating")
 @btime evaluate_d($mbpot, $Rs, $Zs, $z0)
@@ -74,8 +77,8 @@ evaluate_ed!(dEs2, uf_ace, Rs, Zs, z0)
 
 ##
 
-@profview let uf_ace = uf_ace, Rs = Rs, Zs = Zs, z0 = z0, dEs2 = dEs2 
-   for iter = 1:2_000
-      evaluate_ed!(dEs2, uf_ace, Rs, Zs, z0)
-   end
-end
+# @profview let uf_ace = uf_ace, Rs = Rs, Zs = Zs, z0 = z0, dEs2 = dEs2 
+#    for iter = 1:200_000
+#       evaluate_ed!(dEs2, uf_ace, Rs, Zs, z0)
+#    end
+# end
