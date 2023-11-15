@@ -83,22 +83,38 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
 
    # radial embedding 
    Rn, dRn = evaluate_ed(ace, rbasis, Rs, Zs)
+
+   # _dRn = reduce(vcat, dRn)
+   # @show any(isnan, _dRn)
    
    # angular embedding 
    Zlm, dZlm = evaluate_ylm_ed(ace, Rs)
    
+   # _dZlm = reduce(vcat, dZlm)
+   # @show any(isnan, _dZlm)
+
    # pooling 
    A = ace.abasis((Ez, Rn, Zlm))
 
+   # @show any(isnan, A)
+
    # n correlations  # compute with gradient 
-   φ, ∂φ_∂A = evaluate_and_gradient(ace.aadot, A)   
+   φ, ∂φ_∂A = evaluate_and_gradient(ace.aadot, A)  
+   
+   # @show any(isnan, ∂φ_∂A)
 
    # backprop through A 
    ∂φ_∂Ez = BlackHole(TF) 
+   # ∂φ_∂Ez = zeros(TF, size(Ez))
    ∂φ_∂Rn = acquire!(ace.pool, :∂Rn, size(Rn), TF)
    ∂φ_∂Zlm = acquire!(ace.pool, :∂Zlm, size(Zlm), TF)
-   P4ML._pullback_evaluate!((∂φ_∂Ez, ∂φ_∂Rn, ∂φ_∂Zlm), ∂φ_∂A, 
+   fill!(∂φ_∂Rn, zero(TF))
+   fill!(∂φ_∂Zlm, zero(TF))
+   P4ML._pullback_evaluate!((∂φ_∂Ez, unwrap(∂φ_∂Rn), unwrap(∂φ_∂Zlm)), ∂φ_∂A, 
                              ace.abasis, (Ez, Rn, Zlm))
+
+   # @show any(isnan, ∂φ_∂Rn)
+   # @show any(isnan, ∂φ_∂Zlm)
 
    # backprop through the embeddings 
    # depending on whether there is a bottleneck here, this can be 
@@ -116,12 +132,18 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
       end
    end
 
+   # _g = reduce(vcat, ∇φ)
+   # @show any(isnan, _g)
+
    # ... and Ylm 
    for i_lm = 1:size(Zlm, 2)
       for j = 1:length(Rs)
          ∇φ[j] += ∂φ_∂Zlm[j, i_lm] * dZlm[j, i_lm]
       end
    end
+
+   # _g = reduce(vcat, ∇φ)
+   # @show any(isnan, _g)
 
    # release the borrowed arrays 
    release!(Zlm)
