@@ -2,6 +2,7 @@ import Polynomials4ML
 import ACEpotentials
 using Interpolations, ObjectPools
 import SpheriCart
+import SpheriCart: SphericalHarmonics, compute! 
 import ACEpotentials.ACE1
 import ACEpotentials.ACE1: AtomicNumber
 using LinearAlgebra: norm 
@@ -40,21 +41,47 @@ function ACEbase.evaluate(ace::UFACE, Rs, Zs, zi)
 end
 
 
+_get_L(ybasis::SphericalHarmonics{L}) where {L} = L 
+_len_ylm(ybasis) = (_get_L(ybasis) + 1)^2
+
 function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
-   
+   TF = eltype(eltype(Rs))
    rbasis = ace.rbasis 
+   NZ = length(rbasis._i2z)
+
    _spl(rbasis, z) = rbasis.spl[UltraFastACE._z2i(rbasis, z)]
    
    # embeddings 
-   Ez = reduce(vcat, [ SVector((z .== rbasis._i2z)...)' for z in Zs ])
-   Rn = reduce(vcat, [ _spl(rbasis, Zs[j])(norm(Rs[j]))' for j = 1:length(Rs) ])
-   Zlm = ace.ybasis(Rs)
+   # Ez = reduce(vcat, [ SVector((z .== rbasis._i2z)...)' for z in Zs ])
+   Ez = acquire!(ace.pool, :Ez, (length(Zs), NZ), UInt8)
+   fill!(Ez, 0)
+   for (j, z) in enumerate(Zs)
+      iz = _z2i(rbasis, z)
+      Ez[j, iz] = 1
+   end
+
+   # Rn = reduce(vcat, [ _spl(rbasis, Zs[j])(norm(Rs[j]))' for j = 1:length(Rs) ])
+   Rn = acquire!(ace.pool, :Rn, (length(Rs), length(rbasis)), TF)
+   for (j, z) in enumerate(Zs) 
+      spl_j = _spl(rbasis, z)
+      Rn[j, :] .= spl_j(norm(Rs[j]))
+   end
+
+   # Zlm = ace.ybasis(Rs)
+   Zlm = acquire!(ace.pool, :Zlm, (length(Rs), _len_ylm(ace.ybasis)), TF)
+   compute!(Zlm, ace.ybasis, Rs)
    
    # pooling 
    A = ace.abasis((Ez, Rn, Zlm))
 
    # n correlations
    φ = ace.aadot(A)   
+
+   # release the borrowed arrays 
+   release!(Zlm)
+   release!(Rn)
+   release!(Ez)
+   release!(A)
 
    return φ
 end
@@ -100,9 +127,11 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
 
    # radial embedding
    Rn_basis = mbpot.pibasis.basis1p.J
+   LEN_Rn = length(Rn_basis.J)
    spl = make_radial_splines(Rn_basis, zlist; npoints = n_spl_points)
    rbasis_new = SplineRadialsZ(Int.(t_zlist), 
-                     ntuple(iz1 -> spl[(zlist[iz1], z0)], length(zlist)))
+                     ntuple(iz1 -> spl[(zlist[iz1], z0)], length(zlist)), 
+                     LEN_Rn)
    # P4ML style spec of radial embedding 
    spec2i_Rn = 1:length(Rn_basis.J)
 

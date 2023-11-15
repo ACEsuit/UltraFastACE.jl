@@ -5,10 +5,16 @@ struct SparseStaticArray{N, T}
 end
 
 
-struct SplineRadialsZ{SPL, N}
+struct SplineRadialsZ{SPL, N, LEN}
    _i2z::NTuple{N, Int}
    spl::NTuple{N, SPL}
 end
+
+SplineRadialsZ(_i2z::NTuple{N, Int}, spl::NTuple{N, SPL}, LEN
+              ) where {N, SPL} = 
+         SplineRadialsZ{SPL, N, LEN}(_i2z, spl)
+
+Base.length(basis::SplineRadialsZ{SPL, N, LEN}) where {SPL, N, LEN} = LEN
 
 struct SplineRadials{SPL, N}
    _i2z::NTuple{N, Int}
