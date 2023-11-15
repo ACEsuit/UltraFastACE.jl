@@ -66,6 +66,12 @@ function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
 end
 
 
+function ACEbase.evaluate_ed!(∇φ, ace::UFACE, Rs, Zs, z0)
+   i_z0 = _z2i(ace, z0)
+   ace_inner = ace.ace_inner[i_z0]
+   return ACEbase.evaluate_ed!(∇φ, ace_inner, Rs, Zs)
+end
+
 function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
    TF = eltype(eltype(Rs))
    rbasis = ace.rbasis 
@@ -84,8 +90,8 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
    # pooling 
    A = ace.abasis((Ez, Rn, Zlm))
 
-   # n correlations
-   φ, ∂φ_∂A = ace.aadot(A)    # compute with gradient 
+   # n correlations  # compute with gradient 
+   φ, ∂φ_∂A = evaluate_and_gradient(ace.aadot, A)   
 
    # backprop through A 
    ∂φ_∂Ez = BlackHole(TF) 

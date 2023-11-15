@@ -1,6 +1,7 @@
 
 
-using StaticArrays, OffsetArrays, StaticPolynomials
+using StaticArrays, OffsetArrays
+using StaticPolynomials: Polynomial, evaluate_and_gradient
 using DynamicPolynomials: @polyvar
 
 """
