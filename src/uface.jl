@@ -4,6 +4,7 @@ using Interpolations, ObjectPools
 import ACEpotentials.ACE1
 import ACEpotentials.ACE1: AtomicNumber
 using LinearAlgebra: norm 
+using StaticPolynomials: evaluate_and_gradient!
 
 
 const C2R = ConvertC2R
@@ -14,6 +15,7 @@ struct UFACE_inner{TR, TY, TA, TAA}
    ybasis::TY
    abasis::TA
    aadot::TAA
+   # ---------- admin and meta-data 
    pool::TSafe{ArrayPool{FlexArrayCache}}
    meta::Dict
 end
@@ -23,19 +25,24 @@ UFACE_inner(rbasis, ybasis, abasis, aadot) =
                TSafe(ArrayPool(FlexArrayCache)), 
                Dict())
 
-struct UFACE{NZ, INNER}
+struct UFACE{NZ, INNER, PAIR}
    _i2z::NTuple{NZ, Int}
    ace_inner::INNER
+   pairpot::PAIR
+   E0s::Dict{Int, Float64}
 end
 
 
 function ACEbase.evaluate(ace::UFACE, Rs, Zs, zi) 
    i_zi = _z2i(ace, zi)
    ace_inner = ace.ace_inner[i_zi]
-   return ACEbase.evaluate(ace_inner, Rs, Zs)
+   Ei = ( evaluate(ace_inner, Rs, Zs) + 
+          evaluate(ace.pairpot, Rs, Zs, zi) + 
+          ace.E0s[zi] )
 end
 
-
+# --------------------------------------------------------
+# UF_ACE evaluation code. 
 
 function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
    TF = eltype(eltype(Rs))
@@ -72,7 +79,6 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE, Rs, Zs, z0)
    return ACEbase.evaluate_ed!(∇φ, ace_inner, Rs, Zs)
 end
 
-using StaticPolynomials: evaluate_and_gradient!
 
 function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
    TF = eltype(eltype(Rs))
@@ -92,11 +98,11 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
    # pooling 
    A = ace.abasis((Ez, Rn, Zlm))
 
-   # n correlations  # compute with gradient 
+   # n correlations - compute with gradient, do it in-place 
    ∂φ_∂A = acquire!(ace.pool, :∂A, size(A), TF)
    φ = evaluate_and_gradient!(∂φ_∂A, ace.aadot, A)
    
-   # backprop through A 
+   # backprop through A  =>  this part could be done more nicely I think
    ∂φ_∂Ez = BlackHole(TF) 
    # ∂φ_∂Ez = zeros(TF, size(Ez))
    ∂φ_∂Rn = acquire!(ace.pool, :∂Rn, size(Rn), TF)
@@ -119,15 +125,15 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
    # backprop through Rn 
    # We already computed the gradients in the forward pass
    fill!(∇φ, zero(SVector{3, TF}))
-   for n = 1:size(Rn, 2)
-      for j = 1:length(Rs)
+   @inbounds for n = 1:size(Rn, 2)
+      @simd ivdep for j = 1:length(Rs)
          ∇φ[j] += ∂φ_∂Rn[j, n] * dRn[j, n]
       end
    end
 
    # ... and Ylm 
-   for i_lm = 1:size(Zlm, 2)
-      for j = 1:length(Rs)
+   @inbounds for i_lm = 1:size(Zlm, 2)
+      @simd ivdep for j = 1:length(Rs)
          ∇φ[j] += ∂φ_∂Zlm[j, i_lm] * dZlm[j, i_lm]
       end
    end
@@ -243,11 +249,20 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
 end
 
 
-function uface_from_ace1(mbpot; n_spl_points = 100)
+function uface_from_ace1(pot; n_spl_points = 100, 
+                              n_spl_points_pair = 10_000 )
+   mbpot = pot.components[2]
+   pairpot = pot.components[1]
    NZ = length(mbpot.pibasis.zlist)
    _i2z = tuple(Int.(mbpot.pibasis.zlist.list)...)
+   # generate the many-body potential
    ace_inner = tuple( 
          [ uface_from_ace1_inner(mbpot, iz; n_spl_points = n_spl_points) 
            for iz = 1:NZ ]... )
-   return UFACE(_i2z, ace_inner)           
+   # generate the pair potential 
+   pairpot = make_pairpot_splines(pairpot; n_spl_points = n_spl_points_pair)
+   # 1-body potential -- currently just a stand-in 
+   E0s = Dict([ Int(z) => 0.0 for z in mbpot.pibasis.zlist.list ]...)           
+   # return the UF_ACE model
+   return UFACE(_i2z, ace_inner, pairpot, E0s)           
 end
