@@ -2,7 +2,7 @@ import Polynomials4ML
 import ACEpotentials
 using Interpolations, ObjectPools
 import ACEpotentials.ACE1
-import ACEpotentials.ACE1: AtomicNumber
+import ACEpotentials.ACE1: AtomicNumber, PIPotential, OneBody 
 using LinearAlgebra: norm 
 using StaticPolynomials: evaluate_and_gradient!
 
@@ -249,20 +249,56 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
 end
 
 
+
+
 function uface_from_ace1(pot; n_spl_points = 100, 
                               n_spl_points_pair = 10_000 )
-   mbpot = pot.components[2]
-   pairpot = pot.components[1]
-   NZ = length(mbpot.pibasis.zlist)
-   _i2z = tuple(Int.(mbpot.pibasis.zlist.list)...)
-   # generate the many-body potential
-   ace_inner = tuple( 
-         [ uface_from_ace1_inner(mbpot, iz; n_spl_points = n_spl_points) 
-           for iz = 1:NZ ]... )
    # generate the pair potential 
-   pairpot = make_pairpot_splines(pairpot; n_spl_points = n_spl_points_pair)
-   # 1-body potential -- currently just a stand-in 
-   E0s = Dict([ Int(z) => 0.0 for z in mbpot.pibasis.zlist.list ]...)           
+   pairpot = missing 
+   for pc in pot.components 
+      if pc isa PolyPairPot 
+         @info("Importing pair potential model")
+         pairpot = make_pairpot_splines(pc; n_spl_points = n_spl_points_pair)
+         break 
+      end
+   end
+   if ismissing(pairpot)
+      @info("No pair potential found in ACE1 model")
+   end
+
+   # generate the many-body potential
+   ace_inner = missing 
+   _i2z = missing 
+   for pc in pot.components 
+      if pc isa PIPotential
+         @info("Importing many-body potential")
+         mbpot = pc 
+         NZ = length(mbpot.pibasis.zlist)
+         _i2z = tuple(Int.(mbpot.pibasis.zlist.list)...)
+         ace_inner = tuple( 
+            [ uface_from_ace1_inner(mbpot, iz; n_spl_points = n_spl_points) 
+              for iz = 1:NZ ]... )
+         break 
+      end
+   end
+   if ismissing(ace_inner)
+      error("No many-body potential found in ACE1 model; I'm giving up.")
+   end
+
+   # 1-body potential 
+   Eref = missing 
+   for pc in pot.components 
+      if pc isa OneBody
+         @info("Importing 1-body potential")
+         Eref = Dict([ Int(AtomicNumber(sym)) => e0 
+                      for (sym, e0) in pc.E0 ]...)
+         break 
+      end
+   end
+   if ismissing(Eref)
+      @info("No 1-body potential found in ACE1 model")
+   end
+
    # return the UF_ACE model
-   return UFACE(_i2z, ace_inner, pairpot, E0s)           
+   return UFACE(_i2z, ace_inner, pairpot, Eref)           
 end
