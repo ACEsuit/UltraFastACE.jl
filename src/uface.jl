@@ -30,7 +30,16 @@ struct UFACE{NZ, INNER, PAIR}
    ace_inner::INNER
    pairpot::PAIR
    E0s::Dict{Int, Float64}
+   # ---------- 
+   pool::TSafe{ArrayPool{FlexArrayCache}}
+   meta::Dict
 end
+
+UFACE(_i2z, ace_inner, pairpot, E0s) = 
+      UFACE(_i2z, ace_inner, pairpot, E0s,
+            TSafe(ArrayPool(FlexArrayCache)), 
+            Dict())
+
 
 
 function ACEbase.evaluate(ace::UFACE, Rs, Zs, zi) 
@@ -72,11 +81,18 @@ function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
    return φ
 end
 
+function evaluate_ed(ace::UFACE, Rs, Zs, z0)
+   ∇φ = acquire!(ace.pool, :out_dEs, (length(Rs),), eltype(Rs))
+   return evaluate_ed!(∇φ, ace, Rs, Zs, z0)
+end
 
-function ACEbase.evaluate_ed!(∇φ, ace::UFACE, Rs, Zs, z0)
+function evaluate_ed!(∇φ, ace::UFACE, Rs, Zs, z0)
    i_z0 = _z2i(ace, z0)
    ace_inner = ace.ace_inner[i_z0]
-   return ACEbase.evaluate_ed!(∇φ, ace_inner, Rs, Zs)
+   φ, _ = evaluate_ed!(∇φ, ace_inner, Rs, Zs)
+   add_evaluate_d!(∇φ, ace.pairpot, Rs, Zs, z0)
+   φ += ace.E0s[z0] + evaluate(ace.pairpot, Rs, Zs, z0)
+   return φ, ∇φ
 end
 
 

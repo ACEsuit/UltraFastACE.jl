@@ -1,7 +1,7 @@
 
 using ACEpotentials, StaticArrays, BenchmarkTools, 
-      LinearAlgebra, UltraFastACE, Test 
-using ACEbase: evaluate
+      LinearAlgebra, UltraFastACE, Test, ACEbase
+using ACEbase: evaluate, evaluate_ed
 using ACEbase.Testing: print_tf 
 
 function rand_env(; Nat = rand(4:12), r0 = 0.8 * rnn(:Si), r1 = 2.0 * rnn(:Si))
@@ -67,3 +67,15 @@ for ntest = 1:50
            )
 end
 println()
+
+
+## check gradient 
+
+Rs, Zs, z0 = rand_env()
+v1, dv1 = evaluate_ed(uf_ace, Rs, Zs, z0)
+U = randn(SVector{3, Float64}, length(dv1))
+
+F(t) = evaluate(uf_ace, Rs + t * U, Zs, z0)
+dF(t) = (dV = evaluate_ed(uf_ace, Rs + t * U, Zs, z0)[2]; 
+          sum( dot(dv, u) for (dv, u) in zip(dV, U) ) )
+ACEbase.Testing.fdtest(F, dF, 0.0)
