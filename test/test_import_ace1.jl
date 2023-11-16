@@ -71,11 +71,13 @@ println()
 
 ## check gradient 
 
-Rs, Zs, z0 = rand_env()
-v1, dv1 = evaluate_ed(uf_ace, Rs, Zs, z0)
-U = randn(SVector{3, Float64}, length(dv1))
+for ntest = 1:30 
+   Rs, Zs, z0 = rand_env()
+   v1, dv1 = evaluate_ed(uf_ace, Rs, Zs, z0)
+   U = randn(SVector{3, Float64}, length(dv1))
 
-F(t) = evaluate(uf_ace, Rs + t * U, Zs, z0)
-dF(t) = (dV = evaluate_ed(uf_ace, Rs + t * U, Zs, z0)[2]; 
-          sum( dot(dv, u) for (dv, u) in zip(dV, U) ) )
-ACEbase.Testing.fdtest(F, dF, 0.0)
+   F = t -> evaluate(uf_ace, Rs + t * U, Zs, z0)
+   dF = t -> (dV = evaluate_ed(uf_ace, Rs + t * U, Zs, z0)[2]; 
+            sum( dot(dv, u) for (dv, u) in zip(dV, U) ) )
+   print_tf(@test ACEbase.Testing.fdtest(F, dF, 0.0; verbose=false))
+end
