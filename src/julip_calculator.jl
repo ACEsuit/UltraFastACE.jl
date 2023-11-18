@@ -56,15 +56,26 @@ function energy_new(ace::UFACE, at::Atoms)
 end
 
 
-function forces_new!(F, ace::UFACE, at::Atoms)
+function forces_new(ace::UFACE, at::Atoms; 
+                     domain = 1:length(at), 
+                     nlist = neighbourlist(at, cutoff(ace)) )
+   TF = eltype(eltype(at.X)) 
+   F = zeros(SVector{3, Float64}, length(at))
+   forces_new!(F, ace, at; domain = domain, nlist = nlist)
+   return F 
+end
+
+function forces_new!(F, ace::UFACE, at::Atoms; 
+                     domain = 1:length(at), 
+                     nlist = neighbourlist(at, cutoff(ace))
+                  )
    TF = eltype(eltype(at.X))
-   nlist = neighbourlist(at, cutoff(ace))
    maxneigs = ACEpotentials.JuLIP.maxneigs(nlist) 
    Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
    Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
    tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
 
-   for i = 1:length(at) 
+   for i in domain 
       Js, Rs, Zs = ACEpotentials.JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
       z0 = at.Z[i] 
       _, dEs = evaluate_ed(ace, Rs, Zs, z0)
@@ -81,4 +92,18 @@ function forces_new!(F, ace::UFACE, at::Atoms)
    release!(Zs)
 
    return F
+end
+
+
+
+using Folds, ChunkSplitters
+
+function forces_new_mt(ace::UFACE, at::Atoms; 
+                        domain = 1:length(at), 
+                        executor = ThreadedEx(),
+                        ntasks = Threads.nthreads())
+   nlist = neighbourlist(at, cutoff(ace))
+   return Folds.sum( collect(chunks(domain, ntasks)), executor ) do (d, _)
+      forces_new(ace, at; domain=d, nlist = nlist)
+   end
 end

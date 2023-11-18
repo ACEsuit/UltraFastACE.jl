@@ -83,7 +83,18 @@ F2 = forces(jpot, at)
 @info("New calculator")
 F = zeros(SVector{3, Float64}, length(at))
 @btime UltraFastACE.forces_new!($F, $uf_ace, $at)
+@btime UltraFastACE.forces_new($uf_ace, $at)
 
+## 
+
+JuLIP.usethreads!(true)
+at = rand_struct(; rep = 7)
+@info("Multithreaded - JuLIP")
+@time forces(jpot, at)
+@info("Single threaded - new")
+@time UltraFastACE.forces_new(uf_ace, at)
+@info("Multithreaded - new")
+@time UltraFastACE.forces_new_mt(uf_ace, at)
 
 # @time forces(pot, at)
 # @time forces(jpot, at)
@@ -96,3 +107,4 @@ F = zeros(SVector{3, Float64}, length(at))
       UltraFastACE.forces_new!(F, uf_ace, at)
    end
 end
+
