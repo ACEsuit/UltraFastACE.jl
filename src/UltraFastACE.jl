@@ -29,5 +29,7 @@ include("pair.jl")
 
 include("uface.jl")
 
+include("julip_calculator.jl")
+
 
 end

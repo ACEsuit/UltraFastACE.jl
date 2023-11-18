@@ -69,7 +69,7 @@ end
 println()
 
 
-## check gradient 
+## check gradient
 
 for ntest = 1:30 
    Rs, Zs, z0 = rand_env()
