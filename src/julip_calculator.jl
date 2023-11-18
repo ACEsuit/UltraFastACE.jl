@@ -54,3 +54,31 @@ function energy_new(ace::UFACE, at::Atoms)
 
    return E 
 end
+
+
+function forces_new!(F, ace::UFACE, at::Atoms)
+   TF = eltype(eltype(at.X))
+   nlist = neighbourlist(at, cutoff(ace))
+   maxneigs = ACEpotentials.JuLIP.maxneigs(nlist) 
+   Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
+   Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
+   tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
+
+   for i = 1:length(at) 
+      Js, Rs, Zs = ACEpotentials.JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
+      z0 = at.Z[i] 
+      _, dEs = evaluate_ed(ace, Rs, Zs, z0)
+
+      for j = 1:length(Js)
+         F[Js[j]] -= dEs[j] 
+         F[i] += dEs[j]
+      end
+
+      release!(dEs)
+   end
+
+   release!(Rs)
+   release!(Zs)
+
+   return F
+end

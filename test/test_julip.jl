@@ -61,28 +61,38 @@ cutoff(jpot)
 
 JuLIP.usethreads!(false)
 
+##
 # energy(pot, at) ≈ 
 energy(jpot, at) ≈ UltraFastACE.energy_new(uf_ace, at)
 @btime energy($pot, $at)
 @btime energy($jpot, $at)
 @btime UltraFastACE.energy_new($uf_ace, $at)
 
+##
+
 F1 = forces(pot, at)
 F2 = forces(jpot, at)
 @show norm(F1 - F2)
 
 @info("ACE1 Calculator")
-display(@benchmark forces($pot, $at))
+# display(@benchmark forces($pot, $at))
+@btime forces($pot, $at)
 @info("UF_ACE Calculator")
-display(@benchmark forces($jpot, $at))
+# display(@benchmark forces($jpot, $at))
+@btime forces($jpot, $at)
+@info("New calculator")
+F = zeros(SVector{3, Float64}, length(at))
+@btime UltraFastACE.forces_new!($F, $uf_ace, $at)
+
 
 # @time forces(pot, at)
 # @time forces(jpot, at)
 
 ##
 
-@profview let uf_ace = uf_ace, at = at
+@profview let uf_ace = uf_ace, at = at, F = F 
    for ntest = 1:4_000
-      UltraFastACE.energy_new(uf_ace, at)
+      # UltraFastACE.energy_new(uf_ace, at)
+      UltraFastACE.forces_new!(F, uf_ace, at)
    end
 end
