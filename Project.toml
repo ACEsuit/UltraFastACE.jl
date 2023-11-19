@@ -26,6 +26,7 @@ StrideArrays = "d1fa6d79-ef01-42a6-86c9-f7c551f8593b"
 
 [compat]
 ChunkSplitters = "2"
+Folds = "0.2"
 NamedTupleTools = "0.14"
 Polynomials4ML = "0.2.7"
 julia = "1"
