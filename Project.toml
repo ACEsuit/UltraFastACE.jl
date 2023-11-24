@@ -1,7 +1,7 @@
 name = "UltraFastACE"
 uuid = "8bb720ee-daac-48fb-af73-8a282a9cbbd7"
 authors = ["Christoph Ortner <christohortner@gmail.com> and contributors"]
-version = "0.0.1"
+version = "0.0.2"
 
 [deps]
 ACE1 = "e3f9bc04-086e-409a-ba78-e9769fe067bb"
