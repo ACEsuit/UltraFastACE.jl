@@ -88,13 +88,18 @@ F = zeros(SVector{3, Float64}, length(at))
 ## 
 
 JuLIP.usethreads!(true)
-at = rand_struct(; rep = 7)
-@info("Multithreaded - JuLIP")
-@time forces(jpot, at)
-@info("Single threaded - new")
-@time UltraFastACE.forces_new(uf_ace, at)
-@info("Multithreaded - new")
-@time UltraFastACE.forces_new_mt(uf_ace, at)
+at = rand_struct(; rep = 12)
+
+##
+
+@info("neighbourlist")
+@time ACEpotentials.JuLIP.neighbourlist(at, 6.0)
+@info("Forces - Multithreaded - JuLIP")
+display(@benchmark forces(jpot, at))
+@info("Forces - Single threaded - new")
+display(@benchmark UltraFastACE.forces_new(uf_ace, at))
+@info("Forces - Multithreaded - new")
+display(@benchmark UltraFastACE.forces_new_mt(uf_ace, at))
 
 # @time forces(pot, at)
 # @time forces(jpot, at)
