@@ -1,6 +1,6 @@
 
-using ACEpotentials.ACE1.PairPotentials: PolyPairPot
-using ACEpotentials.ACE1: cutoff
+using ACE1.PairPotentials: PolyPairPot
+using ACE1: cutoff
 
 struct SplinePairPot{NZ, T, SPL}
    _i2z::NTuple{NZ, Int}

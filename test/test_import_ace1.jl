@@ -1,5 +1,5 @@
 
-using ACEpotentials, StaticArrays, BenchmarkTools, 
+using ACE1, ACE1x, JuLIP, StaticArrays, BenchmarkTools, 
       LinearAlgebra, UltraFastACE, Test, ACEbase
 using ACEbase: evaluate, evaluate_ed
 using ACEbase.Testing: print_tf 

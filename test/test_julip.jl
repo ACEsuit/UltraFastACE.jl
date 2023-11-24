@@ -1,5 +1,5 @@
 
-using ACEpotentials, StaticArrays, BenchmarkTools, 
+using ACE1, ACE1x, StaticArrays, BenchmarkTools, 
       LinearAlgebra, UltraFastACE, Test, ACEbase
 using ACEbase: evaluate, evaluate_ed
 using ACEbase.Testing: print_tf 
@@ -93,7 +93,7 @@ at = rand_struct(; rep = 12)
 ##
 
 @info("neighbourlist")
-@time ACEpotentials.JuLIP.neighbourlist(at, 6.0)
+@time JuLIP.neighbourlist(at, 6.0)
 @info("Forces - Multithreaded - JuLIP")
 display(@benchmark forces(jpot, at))
 @info("Forces - Single threaded - new")

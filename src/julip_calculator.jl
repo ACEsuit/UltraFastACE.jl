@@ -1,8 +1,6 @@
 
-import ACEpotentials.JuLIP: SitePotential, AtomicNumber
-import ACEpotentials.JuLIP.Potentials: evaluate!, evaluate_d!, cutoff 
-
-              
+import JuLIP: SitePotential, AtomicNumber
+import JuLIP.Potentials: evaluate!, evaluate_d!, cutoff 
 
 struct UFACE_JuLIP{TACE} <: SitePotential
    ace::TACE
@@ -28,15 +26,16 @@ end
 # --------------------------------------------------------
 # experimental new calculators 
 
-import ACEpotentials.JuLIP: Atoms, neighbourlist, maxneigs 
+import JuLIP 
+import JuLIP: Atoms, neighbourlist, maxneigs 
 cutoff(ace::UFACE) = ace.pairpot.rcut
 
-ACEpotentials.JuLIP.NeighbourLists._grow_array!(A::AbstractArray, args...) = nothing 
+JuLIP.NeighbourLists._grow_array!(A::AbstractArray, args...) = nothing 
 
 function energy_new(ace::UFACE, at::Atoms)
    TF = eltype(eltype(at.X))
    nlist = neighbourlist(at, cutoff(ace))
-   maxneigs = ACEpotentials.JuLIP.maxneigs(nlist) 
+   maxneigs = JuLIP.maxneigs(nlist) 
    Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
    Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
    tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
@@ -44,7 +43,7 @@ function energy_new(ace::UFACE, at::Atoms)
    E = zero(TF)
 
    for i = 1:length(at) 
-      Js, Rs, Zs = ACEpotentials.JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
+      Js, Rs, Zs = JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
       z0 = at.Z[i] 
       E += evaluate(ace, Rs, Zs, z0)
    end
@@ -70,13 +69,13 @@ function forces_new!(F, ace::UFACE, at::Atoms;
                      nlist = neighbourlist(at, cutoff(ace))
                   )
    TF = eltype(eltype(at.X))
-   maxneigs = ACEpotentials.JuLIP.maxneigs(nlist) 
+   maxneigs = JuLIP.maxneigs(nlist) 
    Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
    Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
    tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
 
    for i in domain 
-      Js, Rs, Zs = ACEpotentials.JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
+      Js, Rs, Zs = JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
       z0 = at.Z[i] 
       _, dEs = evaluate_ed(ace, Rs, Zs, z0)
 

@@ -1,8 +1,7 @@
 import Polynomials4ML
-import ACEpotentials
 using Interpolations, ObjectPools
-import ACEpotentials.ACE1
-import ACEpotentials.ACE1: AtomicNumber, PIPotential, OneBody 
+import ACE1
+import ACE1: AtomicNumber, PIPotential, OneBody 
 using LinearAlgebra: norm 
 using StaticPolynomials: evaluate_and_gradient!
 
@@ -169,7 +168,7 @@ end
 # transformation code : ACE1 -> UF_ACE models 
 
 function make_radial_splines(Rn_basis, zlist; npoints = 100)
-   @assert Rn_basis.envelope isa ACEpotentials.ACE1.OrthPolys.OneEnvelope
+   @assert Rn_basis.envelope isa ACE1.OrthPolys.OneEnvelope
    rcut = Rn_basis.ru 
    rspl = range(0.0, rcut, length = npoints)
    function _make_rad_spl(z1, z0)
