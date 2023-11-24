@@ -17,7 +17,7 @@ function make_pairpot_splines(pairpot; n_spl_points = 10_000, rin = 1e-10)
    rspl = range(rin, rcut; length = n_spl_points)
    function _make_pair_spl(z1, z0)
       yspl = [ evaluate(pairpot, r, z1, z0) for r in rspl ]
-      return CubicSplineInterpolation(rspl, yspl)
+      return cubic_spline_interpolation(rspl, yspl)
    end
    spl = Dict([ (z1, z0) => _make_pair_spl(z1, z0) 
                  for z0 in zlist for z1 in zlist ])

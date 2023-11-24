@@ -174,7 +174,7 @@ function make_radial_splines(Rn_basis, zlist; npoints = 100)
    rspl = range(0.0, rcut, length = npoints)
    function _make_rad_spl(z1, z0)
       yspl = [ SVector(ACE1.evaluate(Rn_basis, r, z1, z0)...) for r in rspl ]
-      return CubicSplineInterpolation(rspl, yspl)
+      return cubic_spline_interpolation(rspl, yspl)
    end
    spl = Dict([ (z1, z0) => _make_rad_spl(z1, z0) for z0 in zlist, z1 in zlist ])
    return spl  
