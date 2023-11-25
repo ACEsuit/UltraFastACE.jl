@@ -29,6 +29,7 @@ StrideArrays = "d1fa6d79-ef01-42a6-86c9-f7c551f8593b"
 [compat]
 ChunkSplitters = "2"
 Folds = "0.2"
+Interpolations = "0.15"
 LoopVectorization = "0.12"
 NamedTupleTools = "0.14"
 ObjectPools = "0.3"
