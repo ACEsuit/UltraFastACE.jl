@@ -13,16 +13,15 @@ struct UFACE_inner{TR, TY, TA, TAA}
    rbasis::TR
    ybasis::TY
    abasis::TA
-   aadot::TAA
+   aadot::TAA   # potential evaluation 
    # ---------- admin and meta-data 
+   meta::Dict{String, Any}
    pool::TSafe{ArrayPool{FlexArrayCache}}
-   meta::Dict
 end
 
-UFACE_inner(rbasis, ybasis, abasis, aadot) = 
-   UFACE_inner(rbasis, ybasis, abasis, aadot, 
-               TSafe(ArrayPool(FlexArrayCache)), 
-               Dict())
+UFACE_inner(rbasis, ybasis, abasis, aadot, meta = Dict{String, Any}()) = 
+   UFACE_inner(rbasis, ybasis, abasis, aadot, meta, 
+               TSafe(ArrayPool(FlexArrayCache)))
 
 struct UFACE{NZ, INNER, PAIR}
    _i2z::NTuple{NZ, Int}
@@ -197,6 +196,8 @@ end
 
 
 function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
+   meta = Dict{String, Any}() 
+
    b1p = mbpot.pibasis.basis1p
    zlist = b1p.zlist.list 
    z0 = zlist[iz]
@@ -224,6 +225,8 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
    # P4ML style spec of angular embedding
    spec2i_Ylm = Dict([ (l = P4ML.idx2lm(i)[1], m = P4ML.idx2lm(i)[2]) => i  
                        for i = 1:len_Y ]...)
+   meta["Ylm"] = Dict{String, Any}("basis" => "SpheriCart.SphericalHarmonics(L)", 
+                                   "L" => L, )
 
    # transformation from ACE1 to SpheriCart 
    T_Ylm = C2R.r2c_transform(L) * C2R.sc2p4_transform(L)
@@ -247,6 +250,7 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
       spec_A_inds[i] = (i_Ez, i_Rn, i_Ylm)
    end
    A_basis = P4ML.PooledSparseProduct(spec_A_inds)
+   meta["A_spec"] = spec_A_inds
 
    # from AA_transform we can also construct the real AA basis 
    AA_spec_r = AA_transform[:spec_r]
@@ -259,8 +263,11 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
    # AA_basis = P4ML.SparseSymmProd(spec_AA_inds)
    c_r_iz = AA_transform[:T]' * mbpot.coeffs[iz]
    aadot = generate_AA_dot(spec_AA_inds, c_r_iz)
+   meta["AA_spec"] = spec_AA_inds
+   meta["AA_coeffs"] = c_r_iz
 
-   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot)
+   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot, 
+                      meta)
 end
 
 
