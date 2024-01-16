@@ -33,6 +33,7 @@ LoopVectorization = "0.12"
 NamedTupleTools = "0.14"
 ObjectPools = "0.3"
 Polynomials4ML = "0.2.7"
+SpheriCart = "0.0.3"
 julia = "1"
 
 [extras]
