@@ -17,25 +17,8 @@ eval_stack(ace1, Rs, Zs, z0) = (
           + evaluate(ace1.components[2], Rs, Zs, z0)
           + ace1.components[3].E0[chemical_symbol(z0)] )
 
-##
-
-elements = [:Si,:O]
-
-model = acemodel(; elements = elements, 
-                   order = 3, totaldegree = 10, 
-                   Eref = Dict(:Si => -1.234, :O => -0.432))
-ace1 = model.potential                   
-uf_ace = UltraFastACE.uface_from_ace1(ace1; n_spl_points = 10_000)
-
-## ------------------------------------
-
-Rs, Zs, z0 = rand_env()
-v1 = eval_stack(ace1, Rs, Zs, z0)
-v2 = evaluate(uf_ace, Rs, Zs, z0)
-@show v1 ≈ v2
 
 ## produce a basis 
-
 
 module UFB
 
@@ -62,18 +45,18 @@ LinearACEInnerBasis(rbasis, ybasis, abasis, aabasis,
 
 Base.length(ufb_in::LinearACEInnerBasis) = length(ufb_in.aabasis)
 
-struct LinearACEBasis{NZ, INNER}
+struct LinearACEBasis{NZ, INNER, PAIR}
    _i2z::NTuple{NZ, Int}
-   ace_inner::INNER
-   # pairbasis::PAIR
+   ace_inner::NTuple{NZ, INNER}
+   pairbasis::NTuple{NZ, PAIR}
    # E0s::Dict{Int, Float64}
    # ---------- 
    meta::Dict{String, Any}
    pool::TSafe{ArrayPool{FlexArrayCache}}
 end
 
-LinearACEBasis(_i2z, ace_inner, meta = Dict{String, Any}()) = 
-         LinearACEBasis(_i2z, ace_inner, meta, 
+LinearACEBasis(_i2z, ace_inner, pairb, meta = Dict{String, Any}()) = 
+         LinearACEBasis(_i2z, ace_inner, pairb, meta, 
                        TSafe(ArrayPool(FlexArrayCache)))
 
 Base.length(basis::LinearACEBasis) = sum(length, basis.ace_inner) 
@@ -89,13 +72,24 @@ function inner_basis_from_ufpot(ufpot_in)
    return ufb_in
 end
 
+function pair_basis_from_ufpot(ufpot)
+   pairb_ace1 = read_dict(ufpot.meta["pair"]["basis"])
+   return UltraFastACE.make_pair_splines(pairb_ace1)
+end
+
 function basis_from_ufpot(ufpot)
    NZ = length(ufpot.ace_inner)
-   t_inner = ntuple(iz -> inner_basis_from_ufpot(ufpot.ace_inner[iz]), NZ)
-   coeffs = ntuple(iz -> ufpot.ace_inner[iz].meta["AA_coeffs"], NZ)
    meta = Dict{String, Any}(ufpot.meta...)
-   basis = LinearACEBasis(ufpot._i2z, t_inner, meta)
-   ps = (coeffs_inner = coeffs, )
+
+   # many-body 
+   t_inner = ntuple(iz -> inner_basis_from_ufpot(ufpot.ace_inner[iz]), NZ)
+   coeffs_inner = ntuple(iz -> ufpot.ace_inner[iz].meta["AA_coeffs"], NZ)
+
+   # pair 
+   t_pair = pair_basis_from_ufpot(ufpot)
+
+   basis = LinearACEBasis(ufpot._i2z, t_inner, t_pair, meta)
+   ps = (coeffs_inner = coeffs_inner, coeffs_pair = "missing")
    return basis, ps 
 end
 
@@ -198,6 +192,23 @@ end
 
 ##
 
+elements = [:Si,:O]
+
+model = acemodel(; elements = elements, 
+                   order = 3, totaldegree = 10, 
+                   Eref = Dict(:Si => -1.234, :O => -0.432))
+ace1 = model.potential                   
+uf_ace = UltraFastACE.uface_from_ace1(ace1; n_spl_points = 10_000)
+
+## ------------------------------------
+
+Rs, Zs, z0 = rand_env()
+v1 = eval_stack(ace1, Rs, Zs, z0)
+v2 = evaluate(uf_ace, Rs, Zs, z0)
+@show v1 ≈ v2
+
+##
+
 Rs, Zs, z0 = rand_env()
 iz0 = UltraFastACE._z2i(uf_ace, z0)
 ufpot_in1 = uf_ace.ace_inner[iz0]
@@ -220,7 +231,7 @@ adF = ForwardDiff.derivative(F, 0.0)
 dF = [ sum(dot(∂AA2[i, j], Us[j]) for j = 1:length(Rs)) for i = 1:length(AA) ]
 @show adF ≈ dF
 
-## 
+##
 
 basis, ps = UFB.basis_from_ufpot(uf_ace)
 coeffs = vcat(ps.coeffs_inner...)

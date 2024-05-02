@@ -108,10 +108,10 @@ display(@benchmark UltraFastACE.forces_new_mt(uf_ace, at))
 
 ##
 
-@profview let uf_ace = uf_ace, at = at, F = F 
-   for ntest = 1:4_000
-      # UltraFastACE.energy_new(uf_ace, at)
-      UltraFastACE.forces_new!(F, uf_ace, at)
-   end
-end
+# @profview let uf_ace = uf_ace, at = at, F = F 
+#    for ntest = 1:4_000
+#       # UltraFastACE.energy_new(uf_ace, at)
+#       UltraFastACE.forces_new!(F, uf_ace, at)
+#    end
+# end
 

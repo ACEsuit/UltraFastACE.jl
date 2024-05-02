@@ -17,7 +17,7 @@ function SplineRadialsZ(_i2z::NTuple{N, Int}, spl::NTuple{N, SPL}, rcut::Real,
                         LEN = missing
                         )   where {N, SPL} 
    if ismissing(LEN) 
-      LEN = length(spl(1.0))
+      LEN = length(spl[1](1.0))
    end 
    ENV = eltype(env)
    TCUT = typeof(rcut)

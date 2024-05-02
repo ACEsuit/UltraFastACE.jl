@@ -172,8 +172,8 @@ function make_pair_splines(basis; npoints = 100)
    zlist = basis.zlist.list 
 
    function _make_bas_spl(z1, z0)
-      iz1 = JuLIP.z2i(basis, z1)
-      iz0 = JuLIP.z2i(basis, z0)
+      iz1 = JuLIP.z2i(basis, AtomicNumber(z1))
+      iz0 = JuLIP.z2i(basis, AtomicNumber(z0))
       J = basis.J[iz0, iz1]
       x = ACE1.Transforms.transform.(Ref(J.trans), rspl)
       yspl = [ SVector(ACE1.evaluate(J.J, x)...) * (r < J.ru) 
@@ -182,15 +182,38 @@ function make_pair_splines(basis; npoints = 100)
    end
 
    function _make_env(z1, z0) 
-      iz1 = JuLIP.z2i(basis, z1)
-      iz0 = JuLIP.z2i(basis, z0)
-      return basis.J[iz0, iz1].envelope 
+      iz1 = JuLIP.z2i(basis, AtomicNumber(z1))
+      iz0 = JuLIP.z2i(basis, AtomicNumber(z0))
+      return r -> ACE1.evaluate(basis.J[iz0, iz1].envelope, r) 
    end
 
-   spl = Dict([ (z1, z0) => Dict("spl" => _make_bas_spl(z1, z0), 
-                                 "env" => _make_env(z1, z0))
-               for z0 in zlist, z1 in zlist ]...)
-   return spl  
+   function _coeffs(z1, z0) 
+      iz1 = JuLIP.z2i(basis, AtomicNumber(z1))
+      iz0 = JuLIP.z2i(basis, AtomicNumber(z0))
+      i0 = basis.basis.bidx0[iz0, iz1] 
+      len = length(basis.basis.J[iz0, iz1])
+      return basis.coeffs[i0 .+ (1:len)]
+   end
+
+   # spl = Dict([ (z1, z0) => Dict("spl" => _make_bas_spl(z1, z0), 
+   #                               "env" => _make_env(z1, z0), 
+   #                               "coeffs" => _coeffs(z1, z0))
+   #             for z0 in zlist, z1 in zlist ]...)
+
+   function _make_pair_bas(z0) 
+      _i2z = Int.(basis.zlist.list).data 
+      NZ = length(_i2z)
+      # spl = _make_bas_spl(z1, z0)
+      # env = _make_env(z1, z0)
+      # coeffs = _coeffs(z1, z0)
+      return UltraFastACE.SplineRadialsZ( _i2z,
+                     ntuple(iz1 -> _make_bas_spl(_i2z[iz1], z0), NZ),
+                     rcut, 
+                     ntuple(iz1 -> _make_env(_i2z[iz1], z0), NZ), 
+                     )
+   end
+
+   return ntuple(iz0 -> _make_pair_bas(zlist[iz0]), length(zlist))
 end
 
 function make_radial_splines(Rn_basis, zlist; npoints = 100)
