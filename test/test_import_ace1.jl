@@ -71,7 +71,8 @@ println()
 
 ## check gradient
 
-for ntest = 1:30 
+@info("Test gradients")
+for ntest = 1:50 
    Rs, Zs, z0 = rand_env()
    v1, dv1 = evaluate_ed(uf_ace, Rs, Zs, z0)
    U = randn(SVector{3, Float64}, length(dv1))

@@ -4,6 +4,7 @@ import ACE1
 import ACE1: AtomicNumber, PIPotential, OneBody 
 using LinearAlgebra: norm 
 using StaticPolynomials: evaluate_and_gradient!
+using ACEbase: write_dict
 
 
 const C2R = ConvertC2R
@@ -13,16 +14,15 @@ struct UFACE_inner{TR, TY, TA, TAA}
    rbasis::TR
    ybasis::TY
    abasis::TA
-   aadot::TAA
+   aadot::TAA   # potential evaluation 
    # ---------- admin and meta-data 
+   meta::Dict{String, Any}
    pool::TSafe{ArrayPool{FlexArrayCache}}
-   meta::Dict
 end
 
-UFACE_inner(rbasis, ybasis, abasis, aadot) = 
-   UFACE_inner(rbasis, ybasis, abasis, aadot, 
-               TSafe(ArrayPool(FlexArrayCache)), 
-               Dict())
+UFACE_inner(rbasis, ybasis, abasis, aadot, meta = Dict{String, Any}()) = 
+   UFACE_inner(rbasis, ybasis, abasis, aadot, meta, 
+               TSafe(ArrayPool(FlexArrayCache)))
 
 struct UFACE{NZ, INNER, PAIR}
    _i2z::NTuple{NZ, Int}
@@ -30,15 +30,13 @@ struct UFACE{NZ, INNER, PAIR}
    pairpot::PAIR
    E0s::Dict{Int, Float64}
    # ---------- 
-   pool::TSafe{ArrayPool{FlexArrayCache}}
    meta::Dict
+   pool::TSafe{ArrayPool{FlexArrayCache}}
 end
 
-UFACE(_i2z, ace_inner, pairpot, E0s) = 
-      UFACE(_i2z, ace_inner, pairpot, E0s,
-            TSafe(ArrayPool(FlexArrayCache)), 
-            Dict())
-
+UFACE(_i2z, ace_inner, pairpot, E0s, meta = Dict{String, Any}()) = 
+      UFACE(_i2z, ace_inner, pairpot, E0s, meta, 
+            TSafe(ArrayPool(FlexArrayCache)))
 
 
 function ACEbase.evaluate(ace::UFACE, Rs, Zs, zi) 
@@ -167,13 +165,64 @@ end
 # ------------------------------------------------------
 # transformation code : ACE1 -> UF_ACE models 
 
+function make_pair_splines(basis; npoints = 100)
+   @assert all(J.rl == 0 for J in basis.J) 
+   rcut = maximum(J.ru for J in basis.J)
+   rspl = range(0.0, rcut, length = npoints)
+   zlist = basis.zlist.list 
+
+   function _make_bas_spl(z1, z0)
+      iz1 = JuLIP.z2i(basis, AtomicNumber(z1))
+      iz0 = JuLIP.z2i(basis, AtomicNumber(z0))
+      J = basis.J[iz0, iz1]
+      x = ACE1.Transforms.transform.(Ref(J.trans), rspl)
+      yspl = [ SVector(ACE1.evaluate(J.J, x)...) * (r < J.ru) 
+               for (x, r) in zip(x, rspl) ]
+      return cubic_spline_interpolation(rspl, yspl)
+   end
+
+   function _make_env(z1, z0) 
+      iz1 = JuLIP.z2i(basis, AtomicNumber(z1))
+      iz0 = JuLIP.z2i(basis, AtomicNumber(z0))
+      return r -> ACE1.evaluate(basis.J[iz0, iz1].envelope, r) 
+   end
+
+   function _coeffs(z1, z0) 
+      iz1 = JuLIP.z2i(basis, AtomicNumber(z1))
+      iz0 = JuLIP.z2i(basis, AtomicNumber(z0))
+      i0 = basis.basis.bidx0[iz0, iz1] 
+      len = length(basis.basis.J[iz0, iz1])
+      return basis.coeffs[i0 .+ (1:len)]
+   end
+
+   # spl = Dict([ (z1, z0) => Dict("spl" => _make_bas_spl(z1, z0), 
+   #                               "env" => _make_env(z1, z0), 
+   #                               "coeffs" => _coeffs(z1, z0))
+   #             for z0 in zlist, z1 in zlist ]...)
+
+   function _make_pair_bas(z0) 
+      _i2z = Int.(basis.zlist.list).data 
+      NZ = length(_i2z)
+      # spl = _make_bas_spl(z1, z0)
+      # env = _make_env(z1, z0)
+      # coeffs = _coeffs(z1, z0)
+      return UltraFastACE.SplineRadialsZ( _i2z,
+                     ntuple(iz1 -> _make_bas_spl(_i2z[iz1], z0), NZ),
+                     rcut, 
+                     ntuple(iz1 -> _make_env(_i2z[iz1], z0), NZ), 
+                     )
+   end
+
+   return ntuple(iz0 -> _make_pair_bas(zlist[iz0]), length(zlist))
+end
+
 function make_radial_splines(Rn_basis, zlist; npoints = 100)
    @assert Rn_basis.envelope isa ACE1.OrthPolys.OneEnvelope
    rcut = Rn_basis.ru 
    rspl = range(0.0, rcut, length = npoints)
    function _make_rad_spl(z1, z0)
       yspl = [ SVector(ACE1.evaluate(Rn_basis, r, z1, z0)...) for r in rspl ]
-      return cubic_spline_interpolation(rspl, yspl)
+      return cubic_spline_interpolation(rspl, yspl; extrapolation_bc = 0)
    end
    spl = Dict([ (z1, z0) => _make_rad_spl(z1, z0) for z0 in zlist, z1 in zlist ])
    return spl  
@@ -197,10 +246,13 @@ end
 
 
 function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
+   meta = Dict{String, Any}() 
+
    b1p = mbpot.pibasis.basis1p
    zlist = b1p.zlist.list 
    z0 = zlist[iz]
    t_zlist = tuple(zlist...)
+   rcut = cutoff(mbpot)
 
    # radial embedding
    Rn_basis = mbpot.pibasis.basis1p.J
@@ -208,7 +260,8 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
    spl = make_radial_splines(Rn_basis, zlist; npoints = n_spl_points)
    rbasis_new = SplineRadialsZ(Int.(t_zlist), 
                      ntuple(iz1 -> spl[(zlist[iz1], z0)], length(zlist)), 
-                     LEN_Rn)
+                     rcut; 
+                     LEN = LEN_Rn)
    # P4ML style spec of radial embedding 
    spec2i_Rn = 1:length(Rn_basis.J)
 
@@ -224,6 +277,8 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
    # P4ML style spec of angular embedding
    spec2i_Ylm = Dict([ (l = P4ML.idx2lm(i)[1], m = P4ML.idx2lm(i)[2]) => i  
                        for i = 1:len_Y ]...)
+   meta["Ylm"] = Dict{String, Any}("basis" => "SpheriCart.SphericalHarmonics(L)", 
+                                   "L" => L, )
 
    # transformation from ACE1 to SpheriCart 
    T_Ylm = C2R.r2c_transform(L) * C2R.sc2p4_transform(L)
@@ -247,6 +302,7 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
       spec_A_inds[i] = (i_Ez, i_Rn, i_Ylm)
    end
    A_basis = P4ML.PooledSparseProduct(spec_A_inds)
+   meta["A_spec"] = spec_A_inds
 
    # from AA_transform we can also construct the real AA basis 
    AA_spec_r = AA_transform[:spec_r]
@@ -259,8 +315,11 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
    # AA_basis = P4ML.SparseSymmProd(spec_AA_inds)
    c_r_iz = AA_transform[:T]' * mbpot.coeffs[iz]
    aadot = generate_AA_dot(spec_AA_inds, c_r_iz)
+   meta["AA_spec"] = spec_AA_inds
+   meta["AA_coeffs"] = c_r_iz
 
-   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot)
+   return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot, 
+                      meta)
 end
 
 
@@ -270,16 +329,19 @@ function uface_from_ace1(pot; n_spl_points = 100,
                               n_spl_points_pair = 10_000 )
    # generate the pair potential 
    pairpot = missing 
+   meta_pair = "missing"
    for pc in pot.components 
       if pc isa PolyPairPot 
          @info("Importing pair potential model")
          pairpot = make_pairpot_splines(pc; n_spl_points = n_spl_points_pair)
+         meta_pair = Dict{String, Any}(write_dict(pc)...)
          break 
       end
    end
    if ismissing(pairpot)
       @info("No pair potential found in ACE1 model")
    end
+   
 
    # generate the many-body potential
    ace_inner = missing 
@@ -314,6 +376,11 @@ function uface_from_ace1(pot; n_spl_points = 100,
       @info("No 1-body potential found in ACE1 model")
    end
 
+   meta = Dict{String, Any}(
+            "info" => "converted from ACE1.jl", 
+            "pair" => meta_pair)
+
+
    # return the UF_ACE model
-   return UFACE(_i2z, ace_inner, pairpot, Eref)           
+   return UFACE(_i2z, ace_inner, pairpot, Eref, meta)
 end

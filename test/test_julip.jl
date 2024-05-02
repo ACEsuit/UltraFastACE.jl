@@ -42,7 +42,7 @@ pot.components[2] = mbpot = mbpot_
 
 
 # convert to UFACE format 
-uf_ace = UltraFastACE.uface_from_ace1(pot; n_spl_points = 100)
+uf_ace = UltraFastACE.uface_from_ace1(pot; n_spl_points = 10_000)
 
 ##
 
@@ -63,7 +63,9 @@ JuLIP.usethreads!(false)
 
 ##
 # energy(pot, at) ≈ 
-energy(jpot, at) ≈ UltraFastACE.energy_new(uf_ace, at)
+e1 = energy(jpot, at) 
+e2 = UltraFastACE.energy_new(uf_ace, at)
+@show e1 ≈ e2
 @btime energy($pot, $at)
 @btime energy($jpot, $at)
 @btime UltraFastACE.energy_new($uf_ace, $at)
@@ -106,10 +108,10 @@ display(@benchmark UltraFastACE.forces_new_mt(uf_ace, at))
 
 ##
 
-@profview let uf_ace = uf_ace, at = at, F = F 
-   for ntest = 1:4_000
-      # UltraFastACE.energy_new(uf_ace, at)
-      UltraFastACE.forces_new!(F, uf_ace, at)
-   end
-end
+# @profview let uf_ace = uf_ace, at = at, F = F 
+#    for ntest = 1:4_000
+#       # UltraFastACE.energy_new(uf_ace, at)
+#       UltraFastACE.forces_new!(F, uf_ace, at)
+#    end
+# end
 

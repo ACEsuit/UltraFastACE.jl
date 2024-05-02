@@ -1,25 +1,32 @@
-
+using ForwardDiff
 struct SparseStaticArray{N, T}
    idx::UnitRange{Int}
    data::SVector{N, T}
 end
 
 
-struct SplineRadialsZ{SPL, N, LEN}
+struct SplineRadialsZ{SPL, N, LEN, ENV, TCUT}
    _i2z::NTuple{N, Int}
    spl::NTuple{N, SPL}
+   env::NTuple{N, ENV}
+   rcut::TCUT
 end
 
-SplineRadialsZ(_i2z::NTuple{N, Int}, spl::NTuple{N, SPL}, LEN
-              ) where {N, SPL} = 
-         SplineRadialsZ{SPL, N, LEN}(_i2z, spl)
+function SplineRadialsZ(_i2z::NTuple{N, Int}, spl::NTuple{N, SPL}, rcut::Real, 
+                        env = ntuple(n -> x -> one(x), N); 
+                        LEN = missing
+                        )   where {N, SPL} 
+   if ismissing(LEN) 
+      LEN = length(spl[1](1.0))
+   end 
+   ENV = eltype(env)
+   TCUT = typeof(rcut)
+   return SplineRadialsZ{SPL, N, LEN, ENV, TCUT}(_i2z, spl, env, rcut)
+end
+
 
 Base.length(basis::SplineRadialsZ{SPL, N, LEN}) where {SPL, N, LEN} = LEN
 
-struct SplineRadials{SPL, N}
-   _i2z::NTuple{N, Int}
-   spl::NTuple{N, SPL}
-end
 
 
 function evaluate(ace, basis::SplineRadialsZ, 
@@ -43,7 +50,8 @@ function evaluate!(out, basis::SplineRadialsZ, Rs, Zs)
       zj = Zs[ij]
       i_zj = _z2i(basis, zj)
       spl_ij = basis.spl[i_zj] 
-      out[ij, :] .= spl_ij(rij)
+      env = basis.env[i_zj]
+      out[ij, :] .= spl_ij(rij) * env(rij)
    end
    return out
 end
@@ -72,11 +80,14 @@ function evaluate_ed!(Rn, dRn, basis::SplineRadialsZ, Rs, Zs)
       𝐫̂ij = Rs[ij] / rij 
       zj = Zs[ij]
       i_zj = _z2i(basis, zj)
-      spl_ij = basis.spl[i_zj] 
-      Rn[ij, :] .= spl_ij(rij)
+      spl_ij = basis.spl[i_zj]
+      env = basis.env[i_zj](rij) * (rij < basis.rcut) 
+      denv = ForwardDiff.derivative(basis.env[i_zj], rij) * (rij < basis.rcut) 
+      s = spl_ij(rij)
+      Rn[ij, :] .= s * env 
       g = Interpolations.gradient1(spl_ij, rij)
       for n = 1:length(g) 
-         dRn[ij, n] = g[n] * 𝐫̂ij
+         dRn[ij, n] = (s[n] * denv + g[n] * env) * 𝐫̂ij
       end
    end
    return nothing 
