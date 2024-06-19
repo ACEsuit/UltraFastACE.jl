@@ -4,6 +4,9 @@ import ACEbase
 import ACEbase: evaluate, evaluate!, 
                 evaluate_ed, evaluate_ed!
 
+using Bumper, WithAlloc, StrideArrays      
+import WithAlloc: whatalloc          
+
 _i2z(obj, i::Integer) = obj._i2z[i] 
 
 function _z2i(obj, Z)
@@ -28,6 +31,7 @@ include("auxiliary.jl")
 include("pair.jl")
 
 include("uface.jl")
+include("uface_eval.jl")
 
 include("julip_calculator.jl")
 

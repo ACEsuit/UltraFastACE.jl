@@ -28,4 +28,6 @@ function generate_AA_dot(spec, c)
    return Polynomial(dynamic_poly)
 end
 
-
+function eval_and_grad!(∇_A, aadot, A)
+   return evaluate_and_gradient!(∇_A, aadot, A)
+end
