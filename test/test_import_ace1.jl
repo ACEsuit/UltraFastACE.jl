@@ -18,18 +18,37 @@ elements = [:Si,:O]
 # use totaldegree = 10, 12 for static aa 
 #     totaldegree > 15 for dynamic aa
 
-model = acemodel(; elements = elements, 
+@info("Dynamic Model: totaldegree = 15")
+model_dyn = acemodel(; elements = elements, 
                    order = 3, totaldegree = 15, 
                    Eref = Dict(:Si => -1.234, :O => -0.432))
-pot = model.potential
-pairpot = pot.components[1]
-mbpot = pot.components[2]
-pot1 = pot.components[3]
-@show length(mbpot.pibasis.inner[1])
+pot_dyn = model_dyn.potential
+pairpot_dyn = pot_dyn.components[1]
+mbpot_dyn = pot_dyn.components[2]
+pot1_dyn = pot_dyn.components[3]
+@show length(mbpot_dyn.pibasis.inner[1])
+
+
+@info("Static Model: totaldegree = 10")
+model_st = acemodel(; elements = elements, 
+                   order = 3, totaldegree = 10, 
+                   Eref = Dict(:Si => -1.234, :O => -0.432))
+pot_st = model_st.potential
+pairpot_st = pot_st.components[1]
+mbpot_st = pot_st.components[2]
+pot1_st = pot_st.components[3]
+@show length(mbpot_st.pibasis.inner[1])
+
+## 
+
+MODELS = [ (model_dyn, pot_dyn, pairpot_dyn, mbpot_dyn, pot1_dyn), 
+           (model_st,  pot_st,  pairpot_st,  mbpot_st,  pot1_st) ]
 
 ##
 # normalize the potential a bit so that all contributions are O(1) 
 # pot1 will be O(1) by construction  
+
+for (model, pot, pairpot, mbpot, pot1) in MODELS
 
 Nsample = 10_000
 pairpot.coeffs[:] = randn(length(pairpot.coeffs)) 
@@ -45,13 +64,13 @@ sum( evaluate(mbpot_, rand_env()...) for _ = 1:Nsample ) / Nsample
 
 pot.components[2] = mbpot = mbpot_
 
-
 # convert to UFACE format 
 uf_ace = UltraFastACE.uface_from_ace1(pot; n_spl_points = 10_000)
 
-## ------------------------------------
+# ------------------------------------
 
 @info("Test Consistency of ACE1 with UFACE")
+
 for ntest = 1:50 
    Rs, Zs, z0 = rand_env()
 
@@ -73,8 +92,9 @@ end
 println()
 
 
-## check gradient
+# check gradient ------------------------------
 
+@info("test gradients")
 for ntest = 1:30 
    Rs, Zs, z0 = rand_env()
    v1, dv1 = evaluate_ed(uf_ace, Rs, Zs, z0)
@@ -84,4 +104,7 @@ for ntest = 1:30
    dF = t -> (dV = evaluate_ed(uf_ace, Rs + t * U, Zs, z0)[2]; 
             sum( dot(dv, u) for (dv, u) in zip(dV, U) ) )
    print_tf(@test ACEbase.Testing.fdtest(F, dF, 0.0; verbose=false))
+end
+println()
+
 end

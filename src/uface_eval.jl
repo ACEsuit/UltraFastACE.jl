@@ -26,13 +26,12 @@ function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
    Zlm = @withalloc evaluate_ylm!(ace, Rs)
    
    # pooling 
-   A = ace.abasis((Ez, Rn, Zlm))
+   TA = promote_type(eltype(Ez), eltype(Rn), eltype(Zlm))
+   A = @alloc(TA, length(ace.abasis))
+   P4ML.evaluate!(A, ace.abasis, (Ez, Rn, Zlm))
 
    # n correlations
    φ = ace.aadot(A)
-
-   # release the borrowed arrays 
-   release!(A)
 
    end
 
@@ -40,14 +39,14 @@ function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
 end
 
 function evaluate_ed(ace::UFACE, Rs, Zs, z0)
-   ∇φ = acquire!(ace.pool, :out_dEs, (length(Rs),), eltype(Rs))
+   ∇φ = zeros(eltype(Rs), length(Rs))
    return evaluate_ed!(∇φ, ace, Rs, Zs, z0)
 end
 
 function evaluate_ed!(∇φ, ace::UFACE, Rs, Zs, z0)
    i_z0 = _z2i(ace, z0)
    ace_inner = ace.ace_inner[i_z0]
-   φ, _ = evaluate_ed!(∇φ, ace_inner, Rs, Zs)
+   φ, _∇φ = evaluate_ed!(∇φ, ace_inner, Rs, Zs)
    add_evaluate_d!(∇φ, ace.pairpot, Rs, Zs, z0)
    φ += ace.E0s[z0] + evaluate(ace.pairpot, Rs, Zs, z0)
    return φ, ∇φ
@@ -59,34 +58,37 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
    rbasis = ace.rbasis 
    NZ = length(rbasis._i2z)
 
+   @no_escape begin
+
    # embeddings    
    # element embedding  (there is no gradient)
-   Ez = embed_z(ace, Rs, Zs)
+   Ez = @withalloc embed_z!(ace, Rs, Zs)
 
    # radial embedding 
-   Rn, dRn = evaluate_ed(ace, rbasis, Rs, Zs)
+   Rn, dRn = @withalloc evaluate_ed!(rbasis, Rs, Zs)
 
    # angular embedding 
-   Zlm, dZlm = evaluate_ylm_ed(ace, Rs)
+   Zlm, dZlm = @withalloc evaluate_ylm_ed!(ace, Rs)
 
    # pooling 
-   A = ace.abasis((Ez, Rn, Zlm))
+   TA = promote_type(eltype(Ez), eltype(Rn), eltype(Zlm))
+   A = @alloc(TA, length(ace.abasis))
+   P4ML.evaluate!(A, ace.abasis, (Ez, Rn, Zlm))
 
    # n correlations - compute with gradient, do it in-place 
-   ∂φ_∂A = acquire!(ace.pool, :∂A, size(A), TF)
-   φ = evaluate_and_gradient!(∂φ_∂A, ace.aadot, A)
+   ∂φ_∂A = @alloc(TA, length(A))
+   φ = eval_and_grad!(∂φ_∂A, ace.aadot, A)
    
    # backprop through A  =>  this part could be done more nicely I think
    ∂φ_∂Ez = BlackHole(TF) 
    # ∂φ_∂Ez = zeros(TF, size(Ez))
-   ∂φ_∂Rn = acquire!(ace.pool, :∂Rn, size(Rn), TF)
-   ∂φ_∂Zlm = acquire!(ace.pool, :∂Zlm, size(Zlm), TF)
+   ∂φ_∂Rn = @alloc(TF, size(Rn)...)
+   ∂φ_∂Zlm = @alloc(TF, size(Zlm)...)
    fill!(∂φ_∂Rn, zero(TF))
    fill!(∂φ_∂Zlm, zero(TF))
-   P4ML._pullback_evaluate!((∂φ_∂Ez, unwrap(∂φ_∂Rn), unwrap(∂φ_∂Zlm)), 
-                             unwrap(∂φ_∂A), 
-                             ace.abasis, 
-                             (unwrap(Ez), unwrap(Rn), unwrap(Zlm)); 
+   P4ML._pullback_evaluate!((∂φ_∂Ez, ∂φ_∂Rn, ∂φ_∂Zlm), 
+                             ∂φ_∂A, 
+                             ace.abasis, (Ez, Rn, Zlm); 
                              sizecheck=false)
 
    # backprop through the embeddings 
@@ -112,12 +114,7 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
       end
    end
 
-   # release the borrowed arrays 
-   release!(Zlm); release!(dZlm)
-   release!(Rn); release!(dRn)
-   release!(Ez)
-   release!(A)
-   release!(∂φ_∂Rn); release!(∂φ_∂Zlm); release!(∂φ_∂A)
+   end # no_escape
 
    return φ, ∇φ 
 end

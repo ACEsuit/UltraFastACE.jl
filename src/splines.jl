@@ -65,6 +65,11 @@ function evaluate_ed(ace, rbasis, Rs, Zs)
    return Rn, dRn 
 end
 
+function whatalloc(::typeof(evaluate_ed!), basis::SplineRadialsZ, Rs, Zs)
+   TF = eltype(eltype(Rs))
+   return (TF, length(Rs), length(basis)), 
+          (SVector{3, TF}, length(Rs), length(basis))
+end
 
 function evaluate_ed!(Rn, dRn, basis::SplineRadialsZ, Rs, Zs)
    nX = length(Rs)
@@ -87,6 +92,6 @@ function evaluate_ed!(Rn, dRn, basis::SplineRadialsZ, Rs, Zs)
          dRn[ij, n] = g[n] * 𝐫̂ij
       end
    end
-   return nothing 
+   return Rn, dRn 
 end
 

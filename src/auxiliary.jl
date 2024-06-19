@@ -60,6 +60,18 @@ function evaluate_ylm_ed(ace, Rs)
    return Zlm, dZlm
 end
 
+function evaluate_ylm_ed!(Zlm, dZlm, ace, Rs)
+   compute_with_gradients!(Zlm, dZlm, ace.ybasis, Rs)
+   return Zlm, dZlm
+end
+
+function whatalloc(::typeof(evaluate_ylm_ed!), ace, Rs)
+   TF = eltype(eltype(Rs))
+   return (TF, length(Rs), _len_ylm(ace.ybasis)), 
+          (SVector{3, TF}, length(Rs), _len_ylm(ace.ybasis))
+end
+
+
 
 # ------------------------------ 
 #  element embedding 
@@ -107,3 +119,10 @@ function (aadot::AADot)(A)
    return out 
 end
 
+function eval_and_grad!(∇φ_A, aadot::AADot, A)
+   φ = aadot(A)
+   ∇φ_A_1 = P4ML._pb_evaluate(aadot.aabasis, aadot.cc, A)
+   ∇φ_A .= unwrap(∇φ_A_1)
+   release!(∇φ_A_1)
+   return φ
+end
