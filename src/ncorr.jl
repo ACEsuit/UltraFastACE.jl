@@ -28,6 +28,11 @@ function generate_AA_dot(spec, c)
    return Polynomial(dynamic_poly)
 end
 
-function eval_and_grad!(∇_A, aadot, A)
-   return evaluate_and_gradient!(∇_A, aadot, A)
+function eval_and_grad!(∇φ_A, aadot, A)
+   # evaluate_and_gradient!(∇_A, aadot, A)
+   φ, ∇φ_A_1 = evaluate_and_gradient(aadot, A)
+   for n = 1:length(A)
+      ∇φ_A[n] = ∇φ_A_1[n]
+   end
+   return φ 
 end

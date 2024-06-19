@@ -122,7 +122,10 @@ end
 function eval_and_grad!(∇φ_A, aadot::AADot, A)
    φ = aadot(A)
    ∇φ_A_1 = P4ML._pb_evaluate(aadot.aabasis, aadot.cc, A)
-   ∇φ_A .= unwrap(∇φ_A_1)
+   # ∇φ_A .= unwrap(∇φ_A_1)
+   for n = 1:length(A)
+      ∇φ_A[n] = ∇φ_A_1[n]
+   end
    release!(∇φ_A_1)
    return φ
 end

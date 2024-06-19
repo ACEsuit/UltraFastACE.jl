@@ -86,9 +86,12 @@ function evaluate_ed!(Rn, dRn, basis::SplineRadialsZ, Rs, Zs)
       zj = Zs[ij]
       i_zj = _z2i(basis, zj)
       spl_ij = basis.spl[i_zj] 
-      Rn[ij, :] .= spl_ij(rij)
+      # Rn[ij, :] .= spl_ij(rij)
+      Rn_ij = spl_ij(rij)
       g = Interpolations.gradient1(spl_ij, rij)
-      for n = 1:length(g) 
+      @assert length(Rn_ij) == length(g)
+      for n = 1:length(Rn_ij) 
+         Rn[ij, n] = Rn_ij[n]
          dRn[ij, n] = g[n] * 𝐫̂ij
       end
    end
