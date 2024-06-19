@@ -1,3 +1,5 @@
+
+
 #
 # some auxiliary functions for UF_ACE evaluation 
 #
@@ -35,9 +37,19 @@ _len_ylm(ybasis) = (_get_L(ybasis) + 1)^2
 
 function evaluate_ylm(ace, Rs)
    TF = eltype(eltype(Rs))
-   Zlm = acquire!(ace.pool, :Zlm, (length(Rs), _len_ylm(ace.ybasis)), TF)
+   Zlm = zeros(TF, length(Rs), _len_ylm(ace.ybasis))
+   evaluate_ylm!(Zlm, ace, Rs)
+   return Zlm 
+end
+
+function evaluate_ylm!(Zlm, ace, Rs)
    compute!(Zlm, ace.ybasis, Rs)
    return Zlm 
+end
+
+function whatalloc(::typeof(evaluate_ylm!), ace, Rs)
+   TF = eltype(eltype(Rs))
+   return (TF, length(Rs), _len_ylm(ace.ybasis))
 end
 
 function evaluate_ylm_ed(ace, Rs)
@@ -52,11 +64,15 @@ end
 # ------------------------------ 
 #  element embedding 
 
-
-
 function embed_z(ace, Rs, Zs)
    TF = eltype(eltype(Rs))
-   Ez = acquire!(ace.pool, :Ez, (length(Zs), length(ace.rbasis)), TF)
+   # Ez = acquire!(ace.pool, :Ez, (length(Zs), length(ace.rbasis)), TF)
+   Ez = zeros(TF, length(Zs), length(ace.rbasis))
+   return embed_z!(Ez, ace, Rs, Zs)
+end
+
+
+function embed_z!(Ez, ace, Rs, Zs)
    fill!(Ez, 0)
    for (j, z) in enumerate(Zs)
       iz = _z2i(ace.rbasis, z)
@@ -65,4 +81,29 @@ function embed_z(ace, Rs, Zs)
    return Ez 
 end
 
+
+function whatalloc(::typeof(embed_z!), ace, Rs, Zs)
+   TF = eltype(eltype(Rs))
+   return (TF, length(Zs), length(ace.rbasis))
+end
+
+
+# ------------------------------ 
+#  aadot via P4ML 
+
+using LinearAlgebra: dot 
+
+struct AADot{T, TAA}
+   cc::Vector{T} 
+   aabasis::TAA
+end
+
+function (aadot::AADot)(A)
+   @no_escape begin 
+      AA = @alloc(eltype(A), length(aadot.aabasis))
+      P4ML.evaluate!(AA, aadot.aabasis, A)
+      out = dot(aadot.cc, AA)
+   end
+   return out 
+end
 

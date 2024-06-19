@@ -15,13 +15,17 @@ end
 
 elements = [:Si,:O]
 
+# use totaldegree = 10, 12 for static aa 
+#     totaldegree > 15 for dynamic aa
+
 model = acemodel(; elements = elements, 
-                   order = 3, totaldegree = 10, 
+                   order = 3, totaldegree = 15, 
                    Eref = Dict(:Si => -1.234, :O => -0.432))
 pot = model.potential
 pairpot = pot.components[1]
 mbpot = pot.components[2]
 pot1 = pot.components[3]
+@show length(mbpot.pibasis.inner[1])
 
 ##
 # normalize the potential a bit so that all contributions are O(1) 

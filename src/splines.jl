@@ -25,9 +25,15 @@ end
 function evaluate(ace, basis::SplineRadialsZ, 
                   Rs::AbstractVector{<: SVector}, Zs::AbstractVector)
    TF = eltype(eltype(Rs))                  
-   Rn = acquire!(ace.pool, :Rn, (length(Rs), length(basis)), TF)
+   Rn = zeros(TF, length(Rs), length(basis))
    evaluate!(Rn, basis, Rs, Zs)
    return Rn 
+end
+
+function whatalloc(::typeof(ACEbase.evaluate!), 
+                   basis::SplineRadialsZ, Rs, Zs)
+   TF = eltype(eltype(Rs))                  
+   return (TF, length(Rs), length(basis))
 end
 
 
@@ -47,6 +53,8 @@ function evaluate!(out, basis::SplineRadialsZ, Rs, Zs)
    end
    return out
 end
+
+
 
 
 function evaluate_ed(ace, rbasis, Rs, Zs)

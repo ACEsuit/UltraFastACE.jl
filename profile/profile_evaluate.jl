@@ -14,7 +14,7 @@ pot = model.potential
 mbpot = pot.components[2]
 
 # convert to UFACE format 
-uf_ace = UltraFastACE.uface_from_ace1(mbpot; n_spl_points = 100)
+uf_ace = UltraFastACE.uface_from_ace1(pot; n_spl_points = 100)
 
 ## ------------------------------------
 

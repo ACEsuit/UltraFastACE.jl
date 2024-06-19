@@ -15,13 +15,13 @@ struct UFACE_inner{TR, TY, TA, TAA}
    abasis::TA
    aadot::TAA
    # ---------- admin and meta-data 
-   pool::TSafe{ArrayPool{FlexArrayCache}}
+   # pool::TSafe{ArrayPool{FlexArrayCache}}
    meta::Dict
 end
 
 UFACE_inner(rbasis, ybasis, abasis, aadot) = 
    UFACE_inner(rbasis, ybasis, abasis, aadot, 
-               TSafe(ArrayPool(FlexArrayCache)), 
+               # TSafe(ArrayPool(FlexArrayCache)), 
                Dict())
 
 struct UFACE{NZ, INNER, PAIR}
@@ -30,138 +30,16 @@ struct UFACE{NZ, INNER, PAIR}
    pairpot::PAIR
    E0s::Dict{Int, Float64}
    # ---------- 
-   pool::TSafe{ArrayPool{FlexArrayCache}}
+   # pool::TSafe{ArrayPool{FlexArrayCache}}
    meta::Dict
 end
 
 UFACE(_i2z, ace_inner, pairpot, E0s) = 
       UFACE(_i2z, ace_inner, pairpot, E0s,
-            TSafe(ArrayPool(FlexArrayCache)), 
+            # TSafe(ArrayPool(FlexArrayCache)), 
             Dict())
 
 
-
-function ACEbase.evaluate(ace::UFACE, Rs, Zs, zi) 
-   i_zi = _z2i(ace, zi)
-   ace_inner = ace.ace_inner[i_zi]
-   Ei = ( evaluate(ace_inner, Rs, Zs) + 
-          evaluate(ace.pairpot, Rs, Zs, zi) + 
-          ace.E0s[zi] )
-end
-
-# --------------------------------------------------------
-# UF_ACE evaluation code. 
-
-function ACEbase.evaluate(ace::UFACE_inner, Rs, Zs)
-   TF = eltype(eltype(Rs))
-   rbasis = ace.rbasis 
-   NZ = length(rbasis._i2z)
-   
-   # embeddings    
-   # element embedding 
-   Ez = embed_z(ace, Rs, Zs)
-   # radial embedding 
-   Rn = evaluate(ace, rbasis, Rs, Zs)
-   # angular embedding 
-   Zlm = evaluate_ylm(ace, Rs)
-   
-   # pooling 
-   A = ace.abasis((unwrap(Ez), unwrap(Rn), unwrap(Zlm)))
-
-   # n correlations
-   φ = ace.aadot(A)
-
-   # release the borrowed arrays 
-   release!(Zlm)
-   release!(Rn)
-   release!(Ez)
-   release!(A)
-
-   return φ
-end
-
-function evaluate_ed(ace::UFACE, Rs, Zs, z0)
-   ∇φ = acquire!(ace.pool, :out_dEs, (length(Rs),), eltype(Rs))
-   return evaluate_ed!(∇φ, ace, Rs, Zs, z0)
-end
-
-function evaluate_ed!(∇φ, ace::UFACE, Rs, Zs, z0)
-   i_z0 = _z2i(ace, z0)
-   ace_inner = ace.ace_inner[i_z0]
-   φ, _ = evaluate_ed!(∇φ, ace_inner, Rs, Zs)
-   add_evaluate_d!(∇φ, ace.pairpot, Rs, Zs, z0)
-   φ += ace.E0s[z0] + evaluate(ace.pairpot, Rs, Zs, z0)
-   return φ, ∇φ
-end
-
-
-function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
-   TF = eltype(eltype(Rs))
-   rbasis = ace.rbasis 
-   NZ = length(rbasis._i2z)
-
-   # embeddings    
-   # element embedding  (there is no gradient)
-   Ez = embed_z(ace, Rs, Zs)
-
-   # radial embedding 
-   Rn, dRn = evaluate_ed(ace, rbasis, Rs, Zs)
-
-   # angular embedding 
-   Zlm, dZlm = evaluate_ylm_ed(ace, Rs)
-
-   # pooling 
-   A = ace.abasis((Ez, Rn, Zlm))
-
-   # n correlations - compute with gradient, do it in-place 
-   ∂φ_∂A = acquire!(ace.pool, :∂A, size(A), TF)
-   φ = evaluate_and_gradient!(∂φ_∂A, ace.aadot, A)
-   
-   # backprop through A  =>  this part could be done more nicely I think
-   ∂φ_∂Ez = BlackHole(TF) 
-   # ∂φ_∂Ez = zeros(TF, size(Ez))
-   ∂φ_∂Rn = acquire!(ace.pool, :∂Rn, size(Rn), TF)
-   ∂φ_∂Zlm = acquire!(ace.pool, :∂Zlm, size(Zlm), TF)
-   fill!(∂φ_∂Rn, zero(TF))
-   fill!(∂φ_∂Zlm, zero(TF))
-   P4ML._pullback_evaluate!((∂φ_∂Ez, unwrap(∂φ_∂Rn), unwrap(∂φ_∂Zlm)), 
-                             unwrap(∂φ_∂A), 
-                             ace.abasis, 
-                             (unwrap(Ez), unwrap(Rn), unwrap(Zlm)); 
-                             sizecheck=false)
-
-   # backprop through the embeddings 
-   # depending on whether there is a bottleneck here, this can be 
-   # potentially implemented more efficiently without needing writing/reading 
-   # (to be investigated where the bottleneck is)
-   
-   # we just ignore Ez (hence the black hole)
-
-   # backprop through Rn 
-   # We already computed the gradients in the forward pass
-   fill!(∇φ, zero(SVector{3, TF}))
-   @inbounds for n = 1:size(Rn, 2)
-      @simd ivdep for j = 1:length(Rs)
-         ∇φ[j] += ∂φ_∂Rn[j, n] * dRn[j, n]
-      end
-   end
-
-   # ... and Ylm 
-   @inbounds for i_lm = 1:size(Zlm, 2)
-      @simd ivdep for j = 1:length(Rs)
-         ∇φ[j] += ∂φ_∂Zlm[j, i_lm] * dZlm[j, i_lm]
-      end
-   end
-
-   # release the borrowed arrays 
-   release!(Zlm); release!(dZlm)
-   release!(Rn); release!(dRn)
-   release!(Ez)
-   release!(A)
-   release!(∂φ_∂Rn); release!(∂φ_∂Zlm); release!(∂φ_∂A)
-
-   return φ, ∇φ 
-end
 
 
 # ------------------------------------------------------
@@ -196,11 +74,17 @@ end
 
 
 
-function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
+function uface_from_ace1_inner(mbpot, iz; 
+                           n_spl_points = 100, 
+                           aa_static = :auto)
    b1p = mbpot.pibasis.basis1p
    zlist = b1p.zlist.list 
    z0 = zlist[iz]
    t_zlist = tuple(zlist...)
+
+   if aa_static == :auto 
+      aa_static = (length(mbpot.pibasis.inner[1]) < 1_200)
+   end
 
    # radial embedding
    Rn_basis = mbpot.pibasis.basis1p.J
@@ -258,7 +142,13 @@ function uface_from_ace1_inner(mbpot, iz; n_spl_points = 100)
 
    # AA_basis = P4ML.SparseSymmProd(spec_AA_inds)
    c_r_iz = AA_transform[:T]' * mbpot.coeffs[iz]
-   aadot = generate_AA_dot(spec_AA_inds, c_r_iz)
+
+   if aa_static
+      aadot = generate_AA_dot(spec_AA_inds, c_r_iz)
+   else 
+      aabasis = P4ML.SparseSymmProd(spec_AA_inds)
+      aadot = AADot(c_r_iz, aabasis)
+   end 
 
    return UFACE_inner(rbasis_new, rYlm_basis_sc, A_basis, aadot)
 end
