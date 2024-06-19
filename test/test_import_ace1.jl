@@ -1,6 +1,6 @@
 
 using ACE1, ACE1x, JuLIP, StaticArrays, BenchmarkTools, 
-      LinearAlgebra, UltraFastACE, Test, ACEbase
+      LinearAlgebra, UltraFastACE, Test, ACEbase, Random 
 using ACEbase: evaluate, evaluate_ed
 using ACEbase.Testing: print_tf 
 
@@ -10,6 +10,8 @@ function rand_env(; Nat = rand(4:12), r0 = 0.8 * rnn(:Si), r1 = 2.0 * rnn(:Si))
       Zs = [ rand(AtomicNumber.(elements)) for _ = 1:Nat ]
       return Rs, Zs, z0 
 end
+
+Random.seed!(1234)
 
 ##
 
