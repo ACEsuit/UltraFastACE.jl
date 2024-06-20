@@ -58,8 +58,8 @@ end
 
 function evaluate_ylm_ed(ace, Rs)
    TF = eltype(eltype(Rs))
-   Zlm = acquire!(ace.pool, :Zlm, (length(Rs), _len_ylm(ace.ybasis)), TF)
-   dZlm = acquire!(ace.pool, :dZlm, (length(Rs), _len_ylm(ace.ybasis)), SVector{3, TF})
+   Zlm = zeros(TF, (length(Rs), _len_ylm(ace.ybasis)))
+   dZlm = zeros(SVector{3, TF}, (length(Rs), _len_ylm(ace.ybasis)))
    compute_with_gradients!(Zlm, dZlm, ace.ybasis, Rs)
    return Zlm, dZlm
 end
@@ -82,7 +82,6 @@ end
 
 function embed_z(ace, Rs, Zs)
    TF = eltype(eltype(Rs))
-   # Ez = acquire!(ace.pool, :Ez, (length(Zs), length(ace.rbasis)), TF)
    Ez = zeros(TF, length(Zs), length(ace.rbasis))
    return embed_z!(Ez, ace, Rs, Zs)
 end

@@ -59,8 +59,8 @@ end
 
 function evaluate_ed(ace, rbasis, Rs, Zs)
    TF = eltype(eltype(Rs))                  
-   Rn = acquire!(ace.pool, :Rn, (length(Rs), length(rbasis)), TF)
-   dRn = acquire!(ace.pool, :dRn, (length(Rs), length(rbasis)), SVector{3, TF})
+   Rn = zeros(TF, (length(Rs), length(rbasis)))
+   dRn = zeros(SVector{3, TF}, (length(Rs), length(rbasis)))
    evaluate_ed!(Rn, dRn, rbasis, Rs, Zs)
    return Rn, dRn 
 end

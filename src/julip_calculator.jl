@@ -25,6 +25,8 @@ end
 
 # --------------------------------------------------------
 # experimental new calculators 
+# these are for testing only and not really used in 
+# production yet. 
 
 import JuLIP 
 import JuLIP: Atoms, neighbourlist, maxneigs 
