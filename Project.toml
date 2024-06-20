@@ -1,7 +1,7 @@
 name = "UltraFastACE"
 uuid = "8bb720ee-daac-48fb-af73-8a282a9cbbd7"
 authors = ["Christoph Ortner <christohortner@gmail.com> and contributors"]
-version = "0.0.4"
+version = "0.0.5-dev"
 
 [deps]
 ACE1 = "e3f9bc04-086e-409a-ba78-e9769fe067bb"
@@ -15,10 +15,7 @@ Folds = "41a02a25-b8f0-4f67-bc48-60067656b558"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 JuLIP = "945c410c-986d-556a-acb1-167a618e0462"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-LoopVectorization = "bdcacae8-1622-11e9-2a5c-532679323890"
 NamedTupleTools = "d9ec5142-1e00-5aa0-9d6a-321866360f50"
-ObjectPools = "658cac36-ff0f-48ad-967c-110375d98c9d"
-OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 Polynomials4ML = "03c4bcba-a943-47e9-bfa1-b1661fc2974f"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -32,11 +29,11 @@ WithAlloc = "fb1aa66a-603c-4c1d-9bc4-66947c7b08dd"
 [compat]
 ChunkSplitters = "2"
 Folds = "0.2"
-LoopVectorization = "0.12"
 NamedTupleTools = "0.14"
-ObjectPools = "0.3"
-Polynomials4ML = "0.2.11"
+Polynomials4ML = "0.3.0"
 julia = "1"
+WithAlloc = "0.1.0"
+
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"

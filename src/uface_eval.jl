@@ -86,10 +86,9 @@ function ACEbase.evaluate_ed!(∇φ, ace::UFACE_inner, Rs, Zs)
    ∂φ_∂Zlm = @alloc(TF, size(Zlm)...)
    fill!(∂φ_∂Rn, zero(TF))
    fill!(∂φ_∂Zlm, zero(TF))
-   P4ML._pullback_evaluate!((∂φ_∂Ez, ∂φ_∂Rn, ∂φ_∂Zlm), 
-                             ∂φ_∂A, 
-                             ace.abasis, (Ez, Rn, Zlm); 
-                             sizecheck=false)
+   P4ML.pullback!((∂φ_∂Ez, ∂φ_∂Rn, ∂φ_∂Zlm), 
+                  ∂φ_∂A, 
+                  ace.abasis, (Ez, Rn, Zlm))
 
    # backprop through the embeddings 
    # depending on whether there is a bottleneck here, this can be 

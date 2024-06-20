@@ -52,6 +52,8 @@ MODELS = [ (model_dyn, pot_dyn, pairpot_dyn, mbpot_dyn, pot1_dyn),
 
 for (model, pot, pairpot, mbpot, pot1) in MODELS
 
+# (model, pot, pairpot, mbpot, pot1) = MODELS[1]
+
 Nsample = 10_000
 pairpot.coeffs[:] = randn(length(pairpot.coeffs)) 
 a = sum( evaluate(pairpot, rand_env()...) for _ = 1:Nsample ) / Nsample

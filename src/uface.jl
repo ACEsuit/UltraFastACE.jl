@@ -1,5 +1,5 @@
 import Polynomials4ML
-using Interpolations, ObjectPools
+using Interpolations
 import ACE1
 import ACE1: AtomicNumber, PIPotential, OneBody 
 using LinearAlgebra: norm 

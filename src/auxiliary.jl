@@ -23,6 +23,10 @@ Base.setindex!(bh::BlackHole, v, i...) = v
 Base.size(bh::BlackHole) = (Inf, Inf, Inf, Inf, Inf, Inf)
 Base.size(bh::BlackHole, i::Integer) = Inf
 
+Base.fill!(bh::BlackHole, args...) = bh 
+
+Base.eltype(bh::BlackHole{T}) where {T} = T 
+
 # ------------------------------ 
 #  spherical harmonics 
 #  these are some simple wrapper functions around SpheriCart 
@@ -121,11 +125,6 @@ end
 
 function eval_and_grad!(∇φ_A, aadot::AADot, A)
    φ = aadot(A)
-   ∇φ_A_1 = P4ML._pb_evaluate(aadot.aabasis, aadot.cc, A)
-   # ∇φ_A .= unwrap(∇φ_A_1)
-   for n = 1:length(A)
-      ∇φ_A[n] = ∇φ_A_1[n]
-   end
-   release!(∇φ_A_1)
+   P4ML.pullback!(∇φ_A, aadot.cc, aadot.aabasis, A)
    return φ
 end
