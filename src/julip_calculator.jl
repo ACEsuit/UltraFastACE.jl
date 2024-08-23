@@ -18,7 +18,6 @@ function evaluate_d!(dEs, tmp_d, calc::UFACE_JuLIP, Rs, Zs, z0)
    for i = 1:length(Rs)
       dEs[i] = _dEs[i]
    end
-   release!(_dEs)
    return dEs 
 end
 
@@ -34,66 +33,66 @@ cutoff(ace::UFACE) = ace.pairpot.rcut
 
 JuLIP.NeighbourLists._grow_array!(A::AbstractArray, args...) = nothing 
 
-function energy_new(ace::UFACE, at::Atoms)
-   TF = eltype(eltype(at.X))
-   nlist = neighbourlist(at, cutoff(ace))
-   maxneigs = JuLIP.maxneigs(nlist) 
-   Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
-   Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
-   tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
+# function energy_new(ace::UFACE, at::Atoms)
+#    TF = eltype(eltype(at.X))
+#    nlist = neighbourlist(at, cutoff(ace))
+#    maxneigs = JuLIP.maxneigs(nlist) 
+#    Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
+#    Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
+#    tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
 
-   E = zero(TF)
+#    E = zero(TF)
 
-   for i = 1:length(at) 
-      Js, Rs, Zs = JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
-      z0 = at.Z[i] 
-      E += evaluate(ace, Rs, Zs, z0)
-   end
+#    for i = 1:length(at) 
+#       Js, Rs, Zs = JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
+#       z0 = at.Z[i] 
+#       E += evaluate(ace, Rs, Zs, z0)
+#    end
 
-   release!(Rs)
-   release!(Zs)
+#    release!(Rs)
+#    release!(Zs)
 
-   return E 
-end
+#    return E 
+# end
 
 
-function forces_new(ace::UFACE, at::Atoms; 
-                     domain = 1:length(at), 
-                     nlist = neighbourlist(at, cutoff(ace)) )
-   TF = eltype(eltype(at.X)) 
-   F = zeros(SVector{3, Float64}, length(at))
-   forces_new!(F, ace, at; domain = domain, nlist = nlist)
-   return F 
-end
+# function forces_new(ace::UFACE, at::Atoms; 
+#                      domain = 1:length(at), 
+#                      nlist = neighbourlist(at, cutoff(ace)) )
+#    TF = eltype(eltype(at.X)) 
+#    F = zeros(SVector{3, Float64}, length(at))
+#    forces_new!(F, ace, at; domain = domain, nlist = nlist)
+#    return F 
+# end
 
-function forces_new!(F, ace::UFACE, at::Atoms; 
-                     domain = 1:length(at), 
-                     nlist = neighbourlist(at, cutoff(ace))
-                  )
-   TF = eltype(eltype(at.X))
-   maxneigs = JuLIP.maxneigs(nlist) 
-   Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
-   Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
-   tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
+# function forces_new!(F, ace::UFACE, at::Atoms; 
+#                      domain = 1:length(at), 
+#                      nlist = neighbourlist(at, cutoff(ace))
+#                   )
+#    TF = eltype(eltype(at.X))
+#    maxneigs = JuLIP.maxneigs(nlist) 
+#    Rs = acquire!(ace.pool, :calc_Rs, (maxneigs,), SVector{3, TF})
+#    Zs = acquire!(ace.pool, :calc_Zs, (maxneigs,), AtomicNumber)
+#    tmp = (R = unwrap(Rs), Z = unwrap(Zs),)
 
-   for i in domain 
-      Js, Rs, Zs = JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
-      z0 = at.Z[i] 
-      _, dEs = evaluate_ed(ace, Rs, Zs, z0)
+#    for i in domain 
+#       Js, Rs, Zs = JuLIP.Potentials.neigsz!(tmp, nlist, at, i)
+#       z0 = at.Z[i] 
+#       _, dEs = evaluate_ed(ace, Rs, Zs, z0)
 
-      for j = 1:length(Js)
-         F[Js[j]] -= dEs[j] 
-         F[i] += dEs[j]
-      end
+#       for j = 1:length(Js)
+#          F[Js[j]] -= dEs[j] 
+#          F[i] += dEs[j]
+#       end
 
-      release!(dEs)
-   end
+#       release!(dEs)
+#    end
 
-   release!(Rs)
-   release!(Zs)
+#    release!(Rs)
+#    release!(Zs)
 
-   return F
-end
+#    return F
+# end
 
 
 
