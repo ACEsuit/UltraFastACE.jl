@@ -157,7 +157,8 @@ end
 
 
 function uface_from_ace1(pot; n_spl_points = 100, 
-                              n_spl_points_pair = 10_000 )
+                              n_spl_points_pair = 10_000, 
+                              aa_static = :auto  )
    # generate the pair potential 
    pairpot = missing 
    for pc in pot.components 
@@ -181,7 +182,8 @@ function uface_from_ace1(pot; n_spl_points = 100,
          NZ = length(mbpot.pibasis.zlist)
          _i2z = tuple(Int.(mbpot.pibasis.zlist.list)...)
          ace_inner = tuple( 
-            [ uface_from_ace1_inner(mbpot, iz; n_spl_points = n_spl_points) 
+            [ uface_from_ace1_inner(mbpot, iz; n_spl_points = n_spl_points, 
+                                    aa_static = aa_static) 
               for iz = 1:NZ ]... )
          break 
       end
